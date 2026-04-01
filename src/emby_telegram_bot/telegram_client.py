@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 
@@ -22,18 +23,31 @@ class TelegramClient:
         for chat_id in self._chat_ids:
             try:
                 if image_bytes:
-                    self._bot.send_photo(
-                        chat_id=chat_id,
-                        photo=io.BytesIO(image_bytes),
-                        caption=formatted_caption,
-                        parse_mode=ParseMode.MARKDOWN_V2,
+                    self._run_coro(
+                        self._bot.send_photo(
+                            chat_id=chat_id,
+                            photo=io.BytesIO(image_bytes),
+                            caption=formatted_caption,
+                            parse_mode=ParseMode.MARKDOWN_V2,
+                        )
                     )
                 else:
-                    self._bot.send_message(
-                        chat_id=chat_id,
-                        text=formatted_caption,
-                        parse_mode=ParseMode.MARKDOWN_V2,
+                    self._run_coro(
+                        self._bot.send_message(
+                            chat_id=chat_id,
+                            text=formatted_caption,
+                            parse_mode=ParseMode.MARKDOWN_V2,
+                        )
                     )
             except Exception as exc:
                 logging.error("Telegram send failed for chat_id=%s error=%s", chat_id, exc)
 
+    @staticmethod
+    def _run_coro(coro: object) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(coro)
+        else:
+            # If an event loop is already running, schedule without blocking.
+            asyncio.create_task(coro)
