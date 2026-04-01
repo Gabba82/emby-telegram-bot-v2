@@ -13,7 +13,6 @@ class Settings:
     chat_ids: list[str]
     emby_api_url: str
     emby_api_key: str
-    webhook_secret: str
     request_timeout_seconds: int
     episode_buffer_seconds: int
 
@@ -21,7 +20,6 @@ class Settings:
     def from_env(cls) -> "Settings":
         telegram_token = os.getenv("TELEGRAM_TOKEN", "").strip()
         emby_api_key = os.getenv("EMBY_API_KEY", "").strip()
-        webhook_secret = os.getenv("WEBHOOK_SECRET", "").strip()
         chat_ids = _parse_chat_ids(os.getenv("CHAT_IDS", ""))
         emby_api_url = os.getenv("EMBY_API_URL", "http://emby:8096/emby").rstrip("/")
 
@@ -32,8 +30,6 @@ class Settings:
             raise ValueError("Missing TELEGRAM_TOKEN environment variable")
         if not emby_api_key:
             raise ValueError("Missing EMBY_API_KEY environment variable")
-        if not webhook_secret:
-            raise ValueError("Missing WEBHOOK_SECRET environment variable")
         if not chat_ids:
             raise ValueError("Missing CHAT_IDS environment variable")
 
@@ -53,8 +49,6 @@ class Settings:
             chat_ids=chat_ids,
             emby_api_url=emby_api_url,
             emby_api_key=emby_api_key,
-            webhook_secret=webhook_secret,
             request_timeout_seconds=request_timeout_seconds,
             episode_buffer_seconds=episode_buffer_seconds,
         )
-

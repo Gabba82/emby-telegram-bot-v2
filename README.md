@@ -17,7 +17,6 @@ Esta guia esta pensada para usuarios sin experiencia tecnica. Si sabes copiar/pe
 ## Mejoras sobre la version original
 
 - Secretos fuera del codigo (`.env`).
-- Webhook protegido con `X-Webhook-Secret`.
 - Codigo modular y mantenible.
 - Escape seguro de texto para Telegram MarkdownV2.
 - Buffer de episodios con control de concurrencia.
@@ -80,14 +79,12 @@ Ejemplo completo en `.env.example`.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
 - `EMBY_API_URL`: URL base de Emby, por ejemplo `http://192.168.1.112:8096/emby`.
 - `EMBY_API_KEY`: API key de Emby.
-- `WEBHOOK_SECRET`: secreto para validar peticiones webhook.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
 
 ## Seguridad minima recomendada
 
 - No publiques nunca `.env`.
-- Usa un `WEBHOOK_SECRET` largo y aleatorio.
 - Rota tokens si alguna vez se exponen.
 - Limita acceso a `:8081` solo a red confiable.
 

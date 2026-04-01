@@ -28,11 +28,6 @@ def _extract_payload(req: Request) -> dict[str, Any]:
     return payload
 
 
-def _is_authorized(req: Request, secret: str) -> bool:
-    token = req.headers.get("X-Webhook-Secret", "").strip()
-    return token == secret
-
-
 def create_app(settings: Settings) -> Flask:
     app = Flask(__name__)
     emby = EmbyClient(
@@ -58,10 +53,6 @@ def create_app(settings: Settings) -> Flask:
 
     @app.post("/embyhook")
     def embyhook() -> Response | tuple[str, int]:
-        if not _is_authorized(request, settings.webhook_secret):
-            logging.warning("Unauthorized webhook request from %s", request.remote_addr)
-            return "unauthorized", 401
-
         payload = _extract_payload(request)
         logging.info("Webhook event received")
 
@@ -89,4 +80,3 @@ def create_app(settings: Settings) -> Flask:
         return "", 200
 
     return app
-

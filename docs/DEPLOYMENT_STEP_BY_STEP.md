@@ -85,14 +85,9 @@ TELEGRAM_TOKEN=tu_token_de_botfather
 CHAT_IDS=-1001234567890
 EMBY_API_URL=http://192.168.1.112:8096/emby
 EMBY_API_KEY=tu_api_key_de_emby
-WEBHOOK_SECRET=pon_aqui_un_valor_largo_y_aleatorio
 REQUEST_TIMEOUT_SECONDS=15
 EPISODE_BUFFER_SECONDS=60
 ```
-
-`WEBHOOK_SECRET` puede ser algo largo como:
-
-`f2f0a47d8f1f4fd78f04d2f4622f0d4a`
 
 ## 4. Desplegar con Docker
 
@@ -126,13 +121,6 @@ En el plugin de webhook de Emby:
 
 - URL: `http://TU_HOST:8081/embyhook`
 - Metodo: `POST`
-- Header:
-  - `X-Webhook-Secret: <tu_valor_de_WEBHOOK_SECRET>`
-
-Si no te deja meter headers en Emby:
-
-- Pon un proxy inverso que anada ese header.
-- O usa una ruta interna segura que agregue el header.
 
 ## 6. Probar funcionamiento
 
@@ -161,11 +149,6 @@ docker compose up --build -d
 - Asegura que el bot este dentro del grupo/canal.
 - Verifica que `CHAT_IDS` sea correcto.
 
-### Recibo `401 unauthorized` en webhook
-
-- Falta header `X-Webhook-Secret`.
-- El valor no coincide con `WEBHOOK_SECRET`.
-
 ### Emby no alcanza el bot
 
 - Comprueba IP/puerto.
@@ -183,4 +166,3 @@ docker compose up --build -d
 - Rota claves si se filtran.
 - Haz backup de tu `.env`.
 - Limita acceso al puerto 8081 a red de confianza.
-
