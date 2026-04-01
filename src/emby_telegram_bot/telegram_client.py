@@ -15,39 +15,32 @@ def safe_markdown_v2(text: str) -> str:
 
 class TelegramClient:
     def __init__(self, token: str, chat_ids: list[str]) -> None:
-        self._bot = Bot(token=token)
+        self._token = token
         self._chat_ids = chat_ids
 
     def send(self, caption: str, image_bytes: bytes | None) -> None:
         formatted_caption = safe_markdown_v2(caption)
-        for chat_id in self._chat_ids:
-            try:
-                if image_bytes:
-                    self._run_coro(
-                        self._bot.send_photo(
+        try:
+            asyncio.run(self._send_all(formatted_caption, image_bytes))
+        except Exception as exc:
+            logging.error("Telegram batch send failed error=%s", exc)
+
+    async def _send_all(self, formatted_caption: str, image_bytes: bytes | None) -> None:
+        async with Bot(token=self._token) as bot:
+            for chat_id in self._chat_ids:
+                try:
+                    if image_bytes:
+                        await bot.send_photo(
                             chat_id=chat_id,
                             photo=io.BytesIO(image_bytes),
                             caption=formatted_caption,
                             parse_mode=ParseMode.MARKDOWN_V2,
                         )
-                    )
-                else:
-                    self._run_coro(
-                        self._bot.send_message(
+                    else:
+                        await bot.send_message(
                             chat_id=chat_id,
                             text=formatted_caption,
                             parse_mode=ParseMode.MARKDOWN_V2,
                         )
-                    )
-            except Exception as exc:
-                logging.error("Telegram send failed for chat_id=%s error=%s", chat_id, exc)
-
-    @staticmethod
-    def _run_coro(coro: object) -> None:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(coro)
-        else:
-            # If an event loop is already running, schedule without blocking.
-            asyncio.create_task(coro)
+                except Exception as exc:
+                    logging.error("Telegram send failed for chat_id=%s error=%s", chat_id, exc)
