@@ -2,6 +2,8 @@
 
 Version limpia y documentada del bot Emby -> Telegram.
 
+Licencia: MIT (ver `LICENSE`).
+
 ## Que hace este proyecto
 
 Este servicio recibe eventos de Emby por webhook y envia notificaciones a uno o varios chats de Telegram:
@@ -57,6 +59,8 @@ Respuesta esperada:
 {"status":"ok"}
 ```
 
+Este despliegue usa `gunicorn` en Docker (servidor WSGI de produccion).
+
 ## Configuracion paso a paso (detallada para principiantes)
 
 Consulta la guia completa:
@@ -111,3 +115,7 @@ python -m pytest -q -p no:cacheprovider
 ## Migracion desde la version anterior
 
 - `docs/MIGRATION.md`
+
+## Contribuir
+
+- `CONTRIBUTING.md`

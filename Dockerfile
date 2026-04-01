@@ -13,5 +13,4 @@ RUN pip install --no-cache-dir .
 
 EXPOSE 8081
 
-CMD ["python", "bot.py"]
-
+CMD ["gunicorn", "--workers", "2", "--threads", "4", "--bind", "0.0.0.0:8081", "emby_telegram_bot.wsgi:app"]
