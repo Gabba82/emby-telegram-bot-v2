@@ -1,0 +1,10 @@
+services:
+  emby-telegram-bot:
+    build: .
+    container_name: emby-telegram-bot-v2
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
