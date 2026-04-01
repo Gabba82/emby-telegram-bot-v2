@@ -11,6 +11,7 @@ Este servicio recibe eventos de Emby por webhook y envia notificaciones a uno o 
 - Nuevas peliculas.
 - Nuevos episodios.
 - Agrupacion de episodios por temporada en una sola notificacion (buffer temporal).
+- Eventos de reproduccion (inicio, pausa, reanudar, stop) si los activas en Emby.
 
 ## Para quien es
 

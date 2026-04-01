@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from typing import Any
@@ -64,6 +64,56 @@ def _format_episode_list(episode_list: list[str] | None, max_items: int = 12) ->
     shown = ", ".join(episode_list[:max_items])
     hidden = len(episode_list) - max_items
     return f"{shown} ... (+{hidden})"
+
+
+def _first_str(*values: Any) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _event_label(event_code: str) -> str:
+    mapping = {
+        "playback.start": "▶️ Reproduccion iniciada",
+        "playback.pause": "⏸️ Reproduccion pausada",
+        "playback.unpause": "▶️ Reproduccion reanudada",
+        "playback.stop": "⏹️ Reproduccion finalizada",
+        "session.start": "🟢 Sesion iniciada",
+        "session.end": "🔴 Sesion finalizada",
+    }
+    return mapping.get(event_code, "")
+
+
+def build_activity_caption(payload: dict[str, Any]) -> str:
+    event_code = str(payload.get("Event") or "").strip().lower()
+    if not event_code or event_code == "system.notificationtest":
+        return ""
+
+    label = _event_label(event_code) or _first_str(payload.get("Title"), f"Evento Emby: {event_code}")
+
+    user_data = payload.get("User") if isinstance(payload.get("User"), dict) else {}
+    user = _first_str(payload.get("UserName"), user_data.get("Name"))
+
+    item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
+    item_name = _first_str(item.get("Name"), payload.get("ItemName"), payload.get("Name"))
+
+    client = _first_str(payload.get("Client"), payload.get("ClientName"), payload.get("DeviceName"))
+
+    lines = [f"📡 {label}"]
+    if user:
+        lines.append(f"👤 Usuario: {user}")
+    if item_name:
+        lines.append(f"🎬 Contenido: {item_name}")
+    if client:
+        lines.append(f"📺 Cliente: {client}")
+
+    if len(lines) == 1:
+        description = _first_str(payload.get("Description"))
+        if description:
+            lines.append(f"ℹ️ {description}")
+
+    return "\n".join(lines)
 
 
 def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list: list[str] | None = None) -> str:

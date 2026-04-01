@@ -1,4 +1,5 @@
-from emby_telegram_bot.formatting import (
+﻿from emby_telegram_bot.formatting import (
+    build_activity_caption,
     build_caption,
     release_type_from_filename,
     resolution_from_filename,
@@ -26,7 +27,26 @@ def test_build_caption_movie() -> None:
         "Size": 1073741824,
     }
     caption = build_caption(item)
-    assert "🎬 Película: Inception (2010)" in caption
-    assert "⭐ Valoración: 8.8/10" in caption
-    assert "⚙️ Archivo: Pelicula" in caption
+    assert "Película: Inception (2010)" in caption
+    assert "Valoración: 8.8/10" in caption
+    assert "Archivo: Pelicula" in caption
     assert "WEB-DL" in caption
+
+
+def test_build_activity_caption_playback() -> None:
+    payload = {
+        "Event": "playback.start",
+        "UserName": "gabba",
+        "Client": "Android TV",
+        "Item": {"Name": "John Wick"},
+    }
+    caption = build_activity_caption(payload)
+    assert "Reproduccion iniciada" in caption
+    assert "Usuario: gabba" in caption
+    assert "Contenido: John Wick" in caption
+    assert "Cliente: Android TV" in caption
+
+
+def test_build_activity_caption_ignores_test_event() -> None:
+    payload = {"Event": "system.notificationtest", "Title": "Test"}
+    assert build_activity_caption(payload) == ""

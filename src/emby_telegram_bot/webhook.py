@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import logging
@@ -9,7 +9,7 @@ from flask import Flask, Request, Response, request
 from .config import Settings
 from .emby_client import EmbyClient
 from .episode_aggregator import EpisodeAggregator
-from .formatting import build_caption
+from .formatting import build_activity_caption, build_caption
 from .telegram_client import TelegramClient
 
 
@@ -66,17 +66,22 @@ def create_app(settings: Settings) -> Flask:
                 logging.error("Cannot fetch item id=%s error=%s", item_id, exc)
                 return "", 200
 
-        if not item:
-            logging.error("Unknown payload shape: %s", payload)
+        if item:
+            if item.get("Type") == "Episode":
+                aggregator.add_episode(item)
+                return "", 200
+
+            caption = build_caption(item)
+            image = emby.get_item_image(item)
+            telegram.send(caption, image)
             return "", 200
 
-        if item.get("Type") == "Episode":
-            aggregator.add_episode(item)
+        activity_caption = build_activity_caption(payload)
+        if activity_caption:
+            telegram.send(activity_caption, None)
             return "", 200
 
-        caption = build_caption(item)
-        image = emby.get_item_image(item)
-        telegram.send(caption, image)
+        logging.info("Ignored non-media event: %s", payload.get("Event") or "unknown")
         return "", 200
 
     return app
