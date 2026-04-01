@@ -26,7 +26,7 @@ def test_build_caption_movie() -> None:
         "Size": 1073741824,
     }
     caption = build_caption(item)
-    assert "Pelicula: Inception (2010)" in caption
-    assert "Rating: 8.8/10" in caption
+    assert "🎬 Película: Inception (2010)" in caption
+    assert "⭐ Valoración: 8.8/10" in caption
+    assert "⚙️ Archivo: Pelicula" in caption
     assert "WEB-DL" in caption
-
