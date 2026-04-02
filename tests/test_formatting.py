@@ -54,6 +54,23 @@ def test_build_activity_caption_ignores_test_event() -> None:
     assert build_activity_caption(payload) == ""
 
 
+def test_build_activity_caption_episode_includes_series_and_code() -> None:
+    payload = {
+        "Event": "playback.start",
+        "UserName": "gabba",
+    }
+    item = {
+        "Type": "Episode",
+        "SeriesName": "Dorohedoro",
+        "ParentIndexNumber": 1,
+        "IndexNumber": 2,
+        "Name": "La batalla",
+    }
+    caption = build_activity_caption(payload, item_override=item)
+    assert "Dorohedoro S01E02 - La batalla" in caption
+    assert "Usuario: gabba" in caption
+
+
 def test_infer_activity_event_from_title_when_event_missing() -> None:
     payload = {"Title": "Playback paused", "Description": "User paused playback"}
     assert infer_activity_event_code(payload) == "playback.pause"

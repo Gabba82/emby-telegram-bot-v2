@@ -137,7 +137,7 @@ def is_activity_payload(payload: dict[str, Any]) -> bool:
     return bool(item) and (has_user or has_client)
 
 
-def build_activity_caption(payload: dict[str, Any]) -> str:
+def build_activity_caption(payload: dict[str, Any], item_override: dict[str, Any] | None = None) -> str:
     event_code = infer_activity_event_code(payload)
     if not event_code or event_code == "system.notificationtest":
         return ""
@@ -147,8 +147,18 @@ def build_activity_caption(payload: dict[str, Any]) -> str:
     user_data = payload.get("User") if isinstance(payload.get("User"), dict) else {}
     user = _first_str(payload.get("UserName"), user_data.get("Name"))
 
-    item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
+    item = item_override if isinstance(item_override, dict) else {}
+    if not item:
+        item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
+
     item_name = _first_str(item.get("Name"), payload.get("ItemName"), payload.get("Name"))
+    item_type = _first_str(item.get("Type"), payload.get("ItemType"))
+    if item_type == "Episode":
+        series_name = _first_str(item.get("SeriesName"), payload.get("SeriesName"), "Serie")
+        season = int(item.get("ParentIndexNumber") or payload.get("ParentIndexNumber") or 0)
+        episode = int(item.get("IndexNumber") or payload.get("IndexNumber") or 0)
+        episode_name = item_name or "Episodio"
+        item_name = f"{series_name} S{season:02}E{episode:02} - {episode_name}"
 
     client = _first_str(payload.get("Client"), payload.get("ClientName"), payload.get("DeviceName"))
 

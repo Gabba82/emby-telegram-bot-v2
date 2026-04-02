@@ -57,9 +57,20 @@ def create_app(settings: Settings) -> Flask:
         logging.info("Webhook event received")
 
         if is_activity_payload(payload):
-            activity_caption = build_activity_caption(payload)
+            activity_item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
+            activity_item_id = activity_item.get("Id") or payload.get("ItemId")
+            if activity_item_id and (
+                not activity_item or not activity_item.get("Type") or not activity_item.get("Name")
+            ):
+                try:
+                    activity_item = emby.get_item_info(str(activity_item_id))
+                except Exception as exc:
+                    logging.warning("Cannot fetch activity item id=%s error=%s", activity_item_id, exc)
+
+            activity_caption = build_activity_caption(payload, item_override=activity_item)
             if activity_caption:
-                telegram.send(activity_caption, None)
+                activity_image = emby.get_item_image(activity_item) if activity_item else None
+                telegram.send(activity_caption, activity_image)
                 return "", 200
 
         item = payload.get("Item") or {}
