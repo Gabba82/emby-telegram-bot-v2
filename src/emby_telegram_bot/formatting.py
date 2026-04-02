@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 
 SECTION_DIVIDER = "━━━━━━━━━━━━"
@@ -83,6 +84,17 @@ def _event_label(event_code: str) -> str:
         "session.end": "🔴 Sesion finalizada",
     }
     return mapping.get(event_code, "")
+
+
+def _event_time_hhmm(payload: dict[str, Any]) -> str:
+    raw = _first_str(payload.get("Date"), payload.get("Timestamp"), payload.get("EventDate"))
+    if not raw:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.astimezone().strftime("%H:%M")
+    except ValueError:
+        return ""
 
 
 def infer_activity_event_code(payload: dict[str, Any]) -> str:
@@ -173,6 +185,9 @@ def build_activity_caption(
         lines.append(f"🎬 Contenido: {item_name}")
     if client:
         lines.append(f"📺 Cliente: {client}")
+    event_time = _event_time_hhmm(payload)
+    if event_time:
+        lines.append(f"🕒 Hora: {event_time}")
 
     if style == "detailed":
         quality = resolution_from_filename(_first_str(item.get("Path")))

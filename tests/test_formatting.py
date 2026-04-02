@@ -84,6 +84,16 @@ def test_build_activity_caption_detailed_adds_quality_and_year() -> None:
     assert "Año: 2010" in caption
 
 
+def test_build_activity_caption_includes_time_when_date_exists() -> None:
+    payload = {
+        "Event": "playback.start",
+        "Date": "2026-04-02T10:06:44.4940000Z",
+        "Item": {"Name": "John Wick"},
+    }
+    caption = build_activity_caption(payload)
+    assert "Hora:" in caption
+
+
 def test_build_activity_caption_episode_includes_series_and_code() -> None:
     payload = {
         "Event": "playback.start",
