@@ -3,6 +3,7 @@
 import re
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 SECTION_DIVIDER = "━━━━━━━━━━━━"
 
@@ -86,15 +87,31 @@ def _event_label(event_code: str) -> str:
     return mapping.get(event_code, "")
 
 
-def _event_time_hhmm(payload: dict[str, Any]) -> str:
+def _event_time_hhmm(payload: dict[str, Any], timezone_name: str = "Europe/Madrid") -> str:
     raw = _first_str(payload.get("Date"), payload.get("Timestamp"), payload.get("EventDate"))
     if not raw:
         return ""
     try:
+        tz = ZoneInfo(timezone_name)
         dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        return dt.astimezone().strftime("%H:%M")
-    except ValueError:
+        return dt.astimezone(tz).strftime("%H:%M")
+    except Exception:
         return ""
+
+
+def _extract_client(payload: dict[str, Any]) -> str:
+    session = payload.get("Session") if isinstance(payload.get("Session"), dict) else {}
+    playback_info = payload.get("PlaybackInfo") if isinstance(payload.get("PlaybackInfo"), dict) else {}
+    return _first_str(
+        payload.get("Client"),
+        payload.get("ClientName"),
+        payload.get("DeviceName"),
+        session.get("DeviceName"),
+        session.get("Client"),
+        session.get("ClientName"),
+        playback_info.get("Client"),
+        playback_info.get("DeviceName"),
+    )
 
 
 def infer_activity_event_code(payload: dict[str, Any]) -> str:
@@ -143,6 +160,7 @@ def is_activity_payload(payload: dict[str, Any]) -> bool:
             bool(payload.get("Client")),
             bool(payload.get("ClientName")),
             bool(payload.get("DeviceName")),
+            isinstance(payload.get("Session"), dict),
         ]
     )
     # Heuristic: playback-like payloads often include user/client + item
@@ -153,6 +171,7 @@ def build_activity_caption(
     payload: dict[str, Any],
     item_override: dict[str, Any] | None = None,
     style: str = "compact",
+    timezone_name: str = "Europe/Madrid",
 ) -> str:
     event_code = infer_activity_event_code(payload)
     if not event_code or event_code == "system.notificationtest":
@@ -176,7 +195,7 @@ def build_activity_caption(
         episode_name = item_name or "Episodio"
         item_name = f"{series_name} S{season:02}E{episode:02} - {episode_name}"
 
-    client = _first_str(payload.get("Client"), payload.get("ClientName"), payload.get("DeviceName"))
+    client = _extract_client(payload)
 
     lines = [f"📡 {label}"]
     if user:
@@ -185,7 +204,7 @@ def build_activity_caption(
         lines.append(f"🎬 Contenido: {item_name}")
     if client:
         lines.append(f"📺 Cliente: {client}")
-    event_time = _event_time_hhmm(payload)
+    event_time = _event_time_hhmm(payload, timezone_name=timezone_name)
     if event_time:
         lines.append(f"🕒 Hora: {event_time}")
 

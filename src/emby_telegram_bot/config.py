@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 
 def _parse_chat_ids(raw: str) -> list[str]:
@@ -17,6 +18,7 @@ class Settings:
     episode_buffer_seconds: int
     playback_with_image: bool
     playback_style: str
+    app_timezone: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -26,6 +28,7 @@ class Settings:
         emby_api_url = os.getenv("EMBY_API_URL", "http://emby:8096/emby").rstrip("/")
         playback_with_image_raw = os.getenv("PLAYBACK_WITH_IMAGE", "false").strip().lower()
         playback_style = os.getenv("PLAYBACK_STYLE", "compact").strip().lower()
+        app_timezone = os.getenv("APP_TIMEZONE", "Europe/Madrid").strip()
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
@@ -49,6 +52,10 @@ class Settings:
             raise ValueError("EPISODE_BUFFER_SECONDS must be greater than 0")
         if playback_style not in {"compact", "detailed"}:
             raise ValueError("PLAYBACK_STYLE must be one of: compact, detailed")
+        try:
+            ZoneInfo(app_timezone)
+        except Exception as exc:
+            raise ValueError("APP_TIMEZONE must be a valid IANA timezone, e.g. Europe/Madrid") from exc
 
         playback_with_image = playback_with_image_raw in {"1", "true", "yes", "on"}
 
@@ -61,4 +68,5 @@ class Settings:
             episode_buffer_seconds=episode_buffer_seconds,
             playback_with_image=playback_with_image,
             playback_style=playback_style,
+            app_timezone=app_timezone,
         )

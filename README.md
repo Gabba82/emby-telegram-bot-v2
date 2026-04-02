@@ -88,6 +88,7 @@ Ejemplo completo en `.env.example`.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
 - `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
+- `APP_TIMEZONE`: zona horaria IANA para la hora mostrada en reproduccion (ej. `Europe/Madrid`).
 
 ## Seguridad minima recomendada
 

@@ -71,6 +71,7 @@ def create_app(settings: Settings) -> Flask:
                 payload,
                 item_override=activity_item,
                 style=settings.playback_style,
+                timezone_name=settings.app_timezone,
             )
             if activity_caption:
                 activity_image = (

@@ -90,25 +90,18 @@ def test_build_activity_caption_includes_time_when_date_exists() -> None:
         "Date": "2026-04-02T10:06:44.4940000Z",
         "Item": {"Name": "John Wick"},
     }
-    caption = build_activity_caption(payload)
-    assert "Hora:" in caption
+    caption = build_activity_caption(payload, timezone_name="Europe/Madrid")
+    assert "Hora: 12:06" in caption
 
 
-def test_build_activity_caption_episode_includes_series_and_code() -> None:
+def test_build_activity_caption_reads_client_from_session() -> None:
     payload = {
-        "Event": "playback.start",
-        "UserName": "gabba",
+        "Event": "playback.pause",
+        "Session": {"DeviceName": "Samsung TV App"},
+        "Item": {"Name": "Dorohedoro"},
     }
-    item = {
-        "Type": "Episode",
-        "SeriesName": "Dorohedoro",
-        "ParentIndexNumber": 1,
-        "IndexNumber": 2,
-        "Name": "La batalla",
-    }
-    caption = build_activity_caption(payload, item_override=item)
-    assert "Dorohedoro S01E02 - La batalla" in caption
-    assert "Usuario: gabba" in caption
+    caption = build_activity_caption(payload)
+    assert "Cliente: Samsung TV App" in caption
 
 
 def test_infer_activity_event_from_title_when_event_missing() -> None:
