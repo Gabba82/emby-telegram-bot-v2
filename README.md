@@ -86,6 +86,8 @@ Ejemplo completo en `.env.example`.
 - `EMBY_API_KEY`: API key de Emby.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
+- `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
+- `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
 
 ## Seguridad minima recomendada
 

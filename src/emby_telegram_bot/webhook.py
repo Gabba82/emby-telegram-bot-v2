@@ -67,9 +67,17 @@ def create_app(settings: Settings) -> Flask:
                 except Exception as exc:
                     logging.warning("Cannot fetch activity item id=%s error=%s", activity_item_id, exc)
 
-            activity_caption = build_activity_caption(payload, item_override=activity_item)
+            activity_caption = build_activity_caption(
+                payload,
+                item_override=activity_item,
+                style=settings.playback_style,
+            )
             if activity_caption:
-                activity_image = emby.get_item_image(activity_item) if activity_item else None
+                activity_image = (
+                    emby.get_item_image(activity_item)
+                    if activity_item and settings.playback_with_image
+                    else None
+                )
                 telegram.send(activity_caption, activity_image)
                 return "", 200
 

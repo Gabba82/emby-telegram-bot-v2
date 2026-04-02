@@ -137,7 +137,11 @@ def is_activity_payload(payload: dict[str, Any]) -> bool:
     return bool(item) and (has_user or has_client)
 
 
-def build_activity_caption(payload: dict[str, Any], item_override: dict[str, Any] | None = None) -> str:
+def build_activity_caption(
+    payload: dict[str, Any],
+    item_override: dict[str, Any] | None = None,
+    style: str = "compact",
+) -> str:
     event_code = infer_activity_event_code(payload)
     if not event_code or event_code == "system.notificationtest":
         return ""
@@ -169,6 +173,14 @@ def build_activity_caption(payload: dict[str, Any], item_override: dict[str, Any
         lines.append(f"🎬 Contenido: {item_name}")
     if client:
         lines.append(f"📺 Cliente: {client}")
+
+    if style == "detailed":
+        quality = resolution_from_filename(_first_str(item.get("Path")))
+        if quality and quality != "?":
+            lines.append(f"🧾 Calidad: {quality}")
+        year = item.get("ProductionYear")
+        if year:
+            lines.append(f"📅 Año: {year}")
 
     if len(lines) == 1:
         description = _first_str(payload.get("Description"))

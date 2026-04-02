@@ -15,6 +15,8 @@ class Settings:
     emby_api_key: str
     request_timeout_seconds: int
     episode_buffer_seconds: int
+    playback_with_image: bool
+    playback_style: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -22,6 +24,8 @@ class Settings:
         emby_api_key = os.getenv("EMBY_API_KEY", "").strip()
         chat_ids = _parse_chat_ids(os.getenv("CHAT_IDS", ""))
         emby_api_url = os.getenv("EMBY_API_URL", "http://emby:8096/emby").rstrip("/")
+        playback_with_image_raw = os.getenv("PLAYBACK_WITH_IMAGE", "false").strip().lower()
+        playback_style = os.getenv("PLAYBACK_STYLE", "compact").strip().lower()
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
@@ -43,6 +47,10 @@ class Settings:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than 0")
         if episode_buffer_seconds <= 0:
             raise ValueError("EPISODE_BUFFER_SECONDS must be greater than 0")
+        if playback_style not in {"compact", "detailed"}:
+            raise ValueError("PLAYBACK_STYLE must be one of: compact, detailed")
+
+        playback_with_image = playback_with_image_raw in {"1", "true", "yes", "on"}
 
         return cls(
             telegram_token=telegram_token,
@@ -51,4 +59,6 @@ class Settings:
             emby_api_key=emby_api_key,
             request_timeout_seconds=request_timeout_seconds,
             episode_buffer_seconds=episode_buffer_seconds,
+            playback_with_image=playback_with_image,
+            playback_style=playback_style,
         )

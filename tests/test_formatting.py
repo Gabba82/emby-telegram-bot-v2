@@ -49,9 +49,39 @@ def test_build_activity_caption_playback() -> None:
     assert "Cliente: Android TV" in caption
 
 
+def test_build_activity_caption_episode_includes_series_and_code() -> None:
+    payload = {
+        "Event": "playback.start",
+        "UserName": "gabba",
+    }
+    item = {
+        "Type": "Episode",
+        "SeriesName": "Dorohedoro",
+        "ParentIndexNumber": 1,
+        "IndexNumber": 2,
+        "Name": "La batalla",
+    }
+    caption = build_activity_caption(payload, item_override=item)
+    assert "Dorohedoro S01E02 - La batalla" in caption
+    assert "Usuario: gabba" in caption
+
+
 def test_build_activity_caption_ignores_test_event() -> None:
     payload = {"Event": "system.notificationtest", "Title": "Test"}
     assert build_activity_caption(payload) == ""
+
+
+def test_build_activity_caption_detailed_adds_quality_and_year() -> None:
+    payload = {"Event": "playback.start"}
+    item = {
+        "Type": "Movie",
+        "Name": "Inception",
+        "ProductionYear": 2010,
+        "Path": "/media/Inception.1080p.mkv",
+    }
+    caption = build_activity_caption(payload, item_override=item, style="detailed")
+    assert "Calidad: 1080p" in caption
+    assert "Año: 2010" in caption
 
 
 def test_build_activity_caption_episode_includes_series_and_code() -> None:
