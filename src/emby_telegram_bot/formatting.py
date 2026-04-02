@@ -85,8 +85,60 @@ def _event_label(event_code: str) -> str:
     return mapping.get(event_code, "")
 
 
+def infer_activity_event_code(payload: dict[str, Any]) -> str:
+    raw_event = str(payload.get("Event") or "").strip().lower()
+    if raw_event:
+        return raw_event
+
+    text = " ".join(
+        [
+            str(payload.get("Title") or ""),
+            str(payload.get("Description") or ""),
+            str(payload.get("NotificationType") or ""),
+        ]
+    ).lower()
+
+    if "unpause" in text or "resume" in text or "resum" in text or "rean" in text:
+        return "playback.unpause"
+    if "pause" in text or "paus" in text:
+        return "playback.pause"
+    if "stop" in text or "end" in text or "finaliz" in text:
+        return "playback.stop"
+    if "playback" in text or "play" in text or "reproduc" in text:
+        return "playback.start"
+    if "session" in text and ("start" in text or "init" in text):
+        return "session.start"
+    if "session" in text and ("end" in text or "stop" in text):
+        return "session.end"
+    return ""
+
+
+def is_activity_payload(payload: dict[str, Any]) -> bool:
+    event_code = infer_activity_event_code(payload)
+    if event_code.startswith("playback.") or event_code.startswith("session."):
+        return True
+
+    item = payload.get("Item")
+    has_user = any(
+        [
+            bool(payload.get("UserName")),
+            bool(payload.get("UserId")),
+            isinstance(payload.get("User"), dict),
+        ]
+    )
+    has_client = any(
+        [
+            bool(payload.get("Client")),
+            bool(payload.get("ClientName")),
+            bool(payload.get("DeviceName")),
+        ]
+    )
+    # Heuristic: playback-like payloads often include user/client + item
+    return bool(item) and (has_user or has_client)
+
+
 def build_activity_caption(payload: dict[str, Any]) -> str:
-    event_code = str(payload.get("Event") or "").strip().lower()
+    event_code = infer_activity_event_code(payload)
     if not event_code or event_code == "system.notificationtest":
         return ""
 

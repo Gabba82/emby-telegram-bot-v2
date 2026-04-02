@@ -9,7 +9,7 @@ from flask import Flask, Request, Response, request
 from .config import Settings
 from .emby_client import EmbyClient
 from .episode_aggregator import EpisodeAggregator
-from .formatting import build_activity_caption, build_caption
+from .formatting import build_activity_caption, build_caption, is_activity_payload
 from .telegram_client import TelegramClient
 
 
@@ -56,6 +56,12 @@ def create_app(settings: Settings) -> Flask:
         payload = _extract_payload(request)
         logging.info("Webhook event received")
 
+        if is_activity_payload(payload):
+            activity_caption = build_activity_caption(payload)
+            if activity_caption:
+                telegram.send(activity_caption, None)
+                return "", 200
+
         item = payload.get("Item") or {}
         item_id = item.get("Id") or payload.get("ItemId")
 
@@ -74,11 +80,6 @@ def create_app(settings: Settings) -> Flask:
             caption = build_caption(item)
             image = emby.get_item_image(item)
             telegram.send(caption, image)
-            return "", 200
-
-        activity_caption = build_activity_caption(payload)
-        if activity_caption:
-            telegram.send(activity_caption, None)
             return "", 200
 
         logging.info("Ignored non-media event: %s", payload.get("Event") or "unknown")

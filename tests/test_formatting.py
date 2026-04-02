@@ -1,6 +1,8 @@
 ﻿from emby_telegram_bot.formatting import (
     build_activity_caption,
     build_caption,
+    infer_activity_event_code,
+    is_activity_payload,
     release_type_from_filename,
     resolution_from_filename,
 )
@@ -50,3 +52,17 @@ def test_build_activity_caption_playback() -> None:
 def test_build_activity_caption_ignores_test_event() -> None:
     payload = {"Event": "system.notificationtest", "Title": "Test"}
     assert build_activity_caption(payload) == ""
+
+
+def test_infer_activity_event_from_title_when_event_missing() -> None:
+    payload = {"Title": "Playback paused", "Description": "User paused playback"}
+    assert infer_activity_event_code(payload) == "playback.pause"
+
+
+def test_is_activity_payload_with_user_and_item() -> None:
+    payload = {
+        "Item": {"Name": "Dorohedoro S01E01"},
+        "UserName": "gabba",
+        "Client": "Android TV",
+    }
+    assert is_activity_payload(payload) is True

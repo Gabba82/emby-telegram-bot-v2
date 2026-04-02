@@ -36,7 +36,7 @@ class EpisodeAggregator:
 
     def _flush(self, key: tuple[str, int]) -> None:
         with self._lock:
-            episodes = sorted(self._buffer.pop(key, []))
+            episodes = sorted(set(self._buffer.pop(key, [])))
             self._timers.pop(key, None)
             sample = self._samples.pop(key, {})
 
@@ -46,4 +46,3 @@ class EpisodeAggregator:
         season_number = key[1]
         episode_tags = [f"S{season_number:02}E{ep:02}" for ep in episodes]
         self._flush_callback(sample, episode_tags)
-
