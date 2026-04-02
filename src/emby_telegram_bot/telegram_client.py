@@ -18,16 +18,20 @@ class TelegramClient:
         self._token = token
         self._chat_ids = chat_ids
 
-    def send(self, caption: str, image_bytes: bytes | None) -> None:
+    def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> None:
         formatted_caption = safe_markdown_v2(caption)
+        targets = chat_ids or self._chat_ids
+        if not targets:
+            logging.warning("Telegram send skipped because no target chat IDs were provided")
+            return
         try:
-            asyncio.run(self._send_all(formatted_caption, image_bytes))
+            asyncio.run(self._send_all(formatted_caption, image_bytes, targets))
         except Exception as exc:
             logging.error("Telegram batch send failed error=%s", exc)
 
-    async def _send_all(self, formatted_caption: str, image_bytes: bytes | None) -> None:
+    async def _send_all(self, formatted_caption: str, image_bytes: bytes | None, targets: list[str]) -> None:
         async with Bot(token=self._token) as bot:
-            for chat_id in self._chat_ids:
+            for chat_id in targets:
                 try:
                     if image_bytes:
                         await bot.send_photo(

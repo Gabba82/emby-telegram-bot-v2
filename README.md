@@ -82,10 +82,15 @@ Ejemplo completo en `.env.example`.
 
 - `TELEGRAM_TOKEN`: token de BotFather.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
+- `LIBRARY_CHAT_IDS`: opcional, destinos solo para altas de biblioteca (si vacio usa `CHAT_IDS`).
+- `PLAYBACK_CHAT_IDS`: opcional, destinos solo para eventos de reproduccion (si vacio usa `CHAT_IDS`).
 - `EMBY_API_URL`: URL base de Emby, por ejemplo `http://192.168.1.112:8096/emby`.
 - `EMBY_API_KEY`: API key de Emby.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
+- `PLAYBACK_DEBOUNCE_SECONDS`: ventana anti-duplicado para `playback.start/unpause`.
+- `ENABLE_LIBRARY_NOTIFICATIONS`: activa/desactiva notificaciones de biblioteca.
+- `ENABLE_PLAYBACK_NOTIFICATIONS`: activa/desactiva notificaciones de reproduccion/sesion.
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
 - `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
 - `APP_TIMEZONE`: zona horaria IANA para la hora mostrada en reproduccion (ej. `Europe/Madrid`).
