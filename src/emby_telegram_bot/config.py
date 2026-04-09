@@ -28,6 +28,7 @@ class Settings:
     playback_debounce_seconds: int
     enable_library_notifications: bool
     enable_playback_notifications: bool
+    playback_notify_pause: bool
     playback_with_image: bool
     playback_style: str
     app_timezone: str
@@ -49,6 +50,7 @@ class Settings:
         playback_debounce_raw = os.getenv("PLAYBACK_DEBOUNCE_SECONDS", "10").strip()
         enable_library_notifications = _parse_bool(os.getenv("ENABLE_LIBRARY_NOTIFICATIONS", ""), True)
         enable_playback_notifications = _parse_bool(os.getenv("ENABLE_PLAYBACK_NOTIFICATIONS", ""), True)
+        playback_notify_pause = _parse_bool(os.getenv("PLAYBACK_NOTIFY_PAUSE", ""), False)
 
         if not telegram_token:
             raise ValueError("Missing TELEGRAM_TOKEN environment variable")
@@ -93,6 +95,7 @@ class Settings:
             playback_debounce_seconds=playback_debounce_seconds,
             enable_library_notifications=enable_library_notifications,
             enable_playback_notifications=enable_playback_notifications,
+            playback_notify_pause=playback_notify_pause,
             playback_with_image=playback_with_image,
             playback_style=playback_style,
             app_timezone=app_timezone,

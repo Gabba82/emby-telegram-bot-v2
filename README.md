@@ -91,6 +91,7 @@ Ejemplo completo en `.env.example`.
 - `PLAYBACK_DEBOUNCE_SECONDS`: ventana anti-duplicado para eventos `playback.*` (excepto `playback.stop`).
 - `ENABLE_LIBRARY_NOTIFICATIONS`: activa/desactiva notificaciones de biblioteca.
 - `ENABLE_PLAYBACK_NOTIFICATIONS`: activa/desactiva notificaciones de reproduccion/sesion.
+- `PLAYBACK_NOTIFY_PAUSE`: `true/false`, incluye eventos `playback.pause` (por defecto `false` para reducir spam).
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
 - `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
 - `APP_TIMEZONE`: zona horaria IANA para la hora mostrada en reproduccion (ej. `Europe/Madrid`).

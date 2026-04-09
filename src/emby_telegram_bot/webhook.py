@@ -50,6 +50,9 @@ def create_app(settings: Settings) -> Flask:
 
     def _should_send_playback_event(payload: dict[str, Any], activity_item: dict[str, Any]) -> bool:
         event_code = infer_activity_event_code(payload)
+        if event_code == "playback.pause" and not settings.playback_notify_pause:
+            logging.info("Playback pause notification skipped by config")
+            return False
         # Always keep terminal events visible.
         if event_code in {"playback.stop", "session.end"}:
             return True
