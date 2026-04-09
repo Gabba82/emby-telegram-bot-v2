@@ -50,7 +50,10 @@ def create_app(settings: Settings) -> Flask:
 
     def _should_send_playback_event(payload: dict[str, Any], activity_item: dict[str, Any]) -> bool:
         event_code = infer_activity_event_code(payload)
-        if event_code not in {"playback.start", "playback.unpause"}:
+        # Always keep terminal events visible.
+        if event_code in {"playback.stop", "session.end"}:
+            return True
+        if not event_code.startswith("playback."):
             return True
         if settings.playback_debounce_seconds == 0:
             return True

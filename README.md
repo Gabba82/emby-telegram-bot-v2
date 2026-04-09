@@ -88,7 +88,7 @@ Ejemplo completo en `.env.example`.
 - `EMBY_API_KEY`: API key de Emby.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
-- `PLAYBACK_DEBOUNCE_SECONDS`: ventana anti-duplicado para `playback.start/unpause`.
+- `PLAYBACK_DEBOUNCE_SECONDS`: ventana anti-duplicado para eventos `playback.*` (excepto `playback.stop`).
 - `ENABLE_LIBRARY_NOTIFICATIONS`: activa/desactiva notificaciones de biblioteca.
 - `ENABLE_PLAYBACK_NOTIFICATIONS`: activa/desactiva notificaciones de reproduccion/sesion.
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
