@@ -31,30 +31,71 @@ def _size_to_gib(size: int | None) -> str:
     return f"{round(size / (1024 ** 3), 2)} GiB"
 
 
-def _fmt_value(value: str) -> str:
-    return value if value and value != "?" else "N/D"
+def _is_known(value: str) -> bool:
+    return bool(value and value != "?")
+
+
+def _extract_primary_media_source(item: dict[str, Any]) -> dict[str, Any]:
+    media_sources = item.get("MediaSources")
+    if isinstance(media_sources, list) and media_sources and isinstance(media_sources[0], dict):
+        return media_sources[0]
+    return {}
+
+
+def _resolution_from_media_streams(item: dict[str, Any], media_source: dict[str, Any]) -> str:
+    stream_candidates = []
+    item_streams = item.get("MediaStreams")
+    media_streams = media_source.get("MediaStreams")
+    if isinstance(item_streams, list):
+        stream_candidates.extend([s for s in item_streams if isinstance(s, dict)])
+    if isinstance(media_streams, list):
+        stream_candidates.extend([s for s in media_streams if isinstance(s, dict)])
+
+    for stream in stream_candidates:
+        if (stream.get("Type") or "").lower() != "video":
+            continue
+        try:
+            height = int(stream.get("Height") or 0)
+        except Exception:
+            height = 0
+        if height >= 2000:
+            return "2160p"
+        if height >= 1000:
+            return "1080p"
+        if height >= 700:
+            return "720p"
+        if height >= 450:
+            return "480p"
+    return "?"
+
+
+def _join_known(parts: list[str]) -> str:
+    return " | ".join([part for part in parts if _is_known(part)])
 
 
 def _build_file_specs(item: dict[str, Any], season_mode: bool = False) -> str:
-    container = (item.get("Container") or "").upper() or "?"
-    path = item.get("Path", "")
+    media_source = _extract_primary_media_source(item)
+    container = (
+        (item.get("Container") or media_source.get("Container") or "").strip().upper()
+        or "?"
+    )
+    path = _first_str(item.get("Path"), media_source.get("Path"), media_source.get("Name"), item.get("Name"))
     resolution = resolution_from_filename(path)
-    size_str = _size_to_gib(item.get("Size"))
+    if not _is_known(resolution):
+        resolution = _resolution_from_media_streams(item, media_source)
+    size_str = _size_to_gib(item.get("Size") or media_source.get("Size"))
     media_type = item.get("Type")
 
     if season_mode:
-        return f"⚙️ Archivo: Temporada | {_fmt_value(resolution)} | {_fmt_value(container)}"
+        details = _join_known([resolution, container])
+        return f"⚙️ Archivo: Temporada | {details}" if details else "⚙️ Archivo: Temporada"
     if media_type == "Movie":
         release_type = release_type_from_filename(path)
-        return (
-            f"⚙️ Archivo: Pelicula | {_fmt_value(release_type)} | {_fmt_value(resolution)} | "
-            f"{_fmt_value(container)} | {_fmt_value(size_str)}"
-        )
+        details = _join_known([release_type, resolution, container, size_str])
+        return f"⚙️ Archivo: Pelicula | {details}" if details else "⚙️ Archivo: Pelicula"
     if media_type == "Episode":
-        return (
-            f"⚙️ Archivo: Episodio | {_fmt_value(resolution)} | "
-            f"{_fmt_value(container)} | {_fmt_value(size_str)}"
-        )
+        details = _join_known([resolution, container, size_str])
+        return f"⚙️ Archivo: Episodio | {details}" if details else "⚙️ Archivo: Episodio"
     return ""
 
 

@@ -21,7 +21,10 @@ class EmbyClient:
         return response
 
     def get_item_info(self, item_id: str) -> dict[str, Any]:
-        return self._get(f"Items/{item_id}", params={"Fields": "MediaStreams,Path"}).json()
+        return self._get(
+            f"Items/{item_id}",
+            params={"Fields": "MediaStreams,MediaSources,Path,Container,Size"},
+        ).json()
 
     def fetch_image(self, item_id: str | None) -> bytes | None:
         if not item_id:
@@ -47,4 +50,3 @@ class EmbyClient:
             if parent_image:
                 return parent_image
         return self.fetch_image(item.get("Id"))
-

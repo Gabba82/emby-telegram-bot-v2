@@ -12,6 +12,8 @@ Este servicio recibe eventos de Emby por webhook y envia notificaciones a uno o 
 - Nuevos episodios.
 - Agrupacion de episodios por temporada en una sola notificacion (buffer temporal).
 - Eventos de reproduccion (inicio, pausa, reanudar, stop) si los activas en Emby.
+- Deduccion de calidad/formato usando metadata de Emby (`MediaSources/MediaStreams`) con fallback por nombre/ruta.
+- Campos desconocidos ocultos en specs (evita ruido de `N/D`).
 
 ## Para quien es
 

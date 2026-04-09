@@ -35,6 +35,39 @@ def test_build_caption_movie() -> None:
     assert "WEB-DL" in caption
 
 
+def test_build_caption_movie_uses_media_source_fallbacks() -> None:
+    item = {
+        "Type": "Movie",
+        "Name": "The Smashing Machine",
+        "ProductionYear": 2025,
+        "Path": "",
+        "Container": "",
+        "Size": None,
+        "MediaSources": [
+            {
+                "Path": "/media/The.Smashing.Machine.2025.1080p.WEB-DL.mkv",
+                "Container": "mkv",
+                "Size": 1073741824,
+            }
+        ],
+    }
+    caption = build_caption(item)
+    assert "WEB-DL" in caption
+    assert "1080p" in caption
+    assert "MKV" in caption
+    assert "1.0 GiB" in caption
+
+
+def test_build_caption_movie_hides_unknown_fields_instead_of_nd() -> None:
+    item = {
+        "Type": "Movie",
+        "Name": "Unknown Source",
+    }
+    caption = build_caption(item)
+    assert "Archivo: Pelicula" in caption
+    assert "N/D" not in caption
+
+
 def test_build_activity_caption_playback() -> None:
     payload = {
         "Event": "playback.start",
