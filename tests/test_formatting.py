@@ -1,6 +1,8 @@
 ﻿from emby_telegram_bot.formatting import (
     build_activity_caption,
     build_caption,
+    build_search_item_caption,
+    build_search_results_message,
     infer_activity_event_code,
     is_activity_payload,
     release_type_from_filename,
@@ -149,3 +151,110 @@ def test_is_activity_payload_with_user_and_item() -> None:
         "Client": "Android TV",
     }
     assert is_activity_payload(payload) is True
+
+
+def test_build_search_results_message_lists_movies_and_series() -> None:
+    message = build_search_results_message(
+        "wick",
+        [
+            {"Type": "Movie", "Name": "John Wick", "ProductionYear": 2014},
+            {"Type": "Series", "Name": "Wicked City"},
+        ],
+    )
+    assert "Busqueda: wick" in message
+    assert "Pelicula: John Wick (2014)" in message
+    assert "Serie: Wicked City" in message
+
+
+def test_build_search_results_message_empty() -> None:
+    message = build_search_results_message("zzzz", [])
+    assert "No he encontrado" in message
+
+
+def test_build_search_item_caption_includes_overview() -> None:
+    caption = build_search_item_caption(
+        {
+            "Type": "Movie",
+            "Name": "John Wick",
+            "ProductionYear": 2014,
+            "Overview": "Un asesino retirado vuelve a la accion.",
+        }
+    )
+    assert "Pelicula: John Wick (2014)" in caption
+    assert "Un asesino retirado" in caption
+
+
+def test_build_search_item_caption_lists_movie_versions() -> None:
+    caption = build_search_item_caption(
+        {
+            "Type": "Movie",
+            "Name": "Dune",
+            "MediaSources": [
+                {
+                    "Container": "mkv",
+                    "Size": 1073741824,
+                    "MediaStreams": [
+                        {"Type": "Video", "Height": 2160},
+                        {"Type": "Audio", "Language": "spa", "Codec": "ac3", "Channels": 6},
+                    ],
+                },
+                {
+                    "Container": "mp4",
+                    "Size": 536870912,
+                    "MediaStreams": [
+                        {"Type": "Video", "Height": 1080},
+                        {"Type": "Audio", "Language": "eng", "Codec": "aac", "Channels": 2},
+                    ],
+                },
+            ],
+        }
+    )
+    assert "Versiones disponibles" in caption
+    assert "2160p" in caption
+    assert "1080p" in caption
+    assert "Audio: spa" in caption
+
+
+def test_build_search_item_caption_lists_single_movie_version_details() -> None:
+    caption = build_search_item_caption(
+        {
+            "Type": "Movie",
+            "Name": "Arrival",
+            "MediaSources": [
+                {
+                    "Container": "mkv",
+                    "Size": 1073741824,
+                    "MediaStreams": [
+                        {"Type": "Video", "Height": 1080},
+                        {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                        {"Type": "Audio", "Language": "eng", "Codec": "aac", "Channels": 2},
+                    ],
+                },
+            ],
+        }
+    )
+    assert "Datos de la version" in caption
+    assert "1080p" in caption
+    assert "MKV" in caption
+    assert "Audio: spa" in caption
+    assert "eng" in caption
+
+
+def test_build_search_item_caption_lists_series_availability() -> None:
+    caption = build_search_item_caption(
+        {"Type": "Series", "Name": "Dorohedoro"},
+        series_seasons=[
+            {
+                "IndexNumber": 1,
+                "Episodes": [
+                    {"IndexNumber": 1},
+                    {"IndexNumber": 2},
+                    {"IndexNumber": 3},
+                ],
+            },
+            {"IndexNumber": 2, "ChildCount": 4},
+        ],
+    )
+    assert "Temporadas disponibles" in caption
+    assert "T01: E01, E02, E03" in caption
+    assert "T02: 4 episodios" in caption

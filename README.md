@@ -12,6 +12,7 @@ Este servicio recibe eventos de Emby por webhook y envia notificaciones a uno o 
 - Nuevos episodios.
 - Agrupacion de episodios por temporada en una sola notificacion (buffer temporal).
 - Eventos de reproduccion (inicio, pausa, reanudar, stop) si los activas en Emby.
+- Consultas desde Telegram con boton o comando `/buscar`.
 - Deduccion de calidad/formato usando metadata de Emby (`MediaSources/MediaStreams`) con fallback por nombre/ruta.
 - Campos desconocidos ocultos en specs (evita ruido de `N/D`).
 
@@ -97,6 +98,30 @@ Ejemplo completo en `.env.example`.
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
 - `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
 - `APP_TIMEZONE`: zona horaria IANA para la hora mostrada en reproduccion (ej. `Europe/Madrid`).
+- `TELEGRAM_WEBHOOK_SECRET`: opcional, secreto para validar el webhook de Telegram.
+
+## Consultas desde Telegram
+
+El bot puede buscar peliculas y series en Emby desde Telegram.
+
+- Envia `/menu` al bot y pulsa `Buscar por privado`.
+- O envia directamente `/buscar nombre de la peli o serie`.
+- En el chat privado con el bot, `/start` o `/menu` activa un teclado persistente junto a la barra de escribir con el boton `Buscar pelicula o serie`.
+- Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
+- El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
+- En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
+- En series, la ficha intenta mostrar temporadas y episodios disponibles.
+- En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano y audios; si hay varias versiones, lista cada una.
+
+Para recibir esos mensajes, configura el webhook de Telegram apuntando a:
+
+```text
+https://<HOST>/telegramhook
+```
+
+Telegram necesita una URL publica con HTTPS. Si el contenedor escucha en `:8081`, ponlo detras de un proxy inverso con TLS que redirija a `http://localhost:8081/telegramhook`.
+
+Si defines `TELEGRAM_WEBHOOK_SECRET`, configura el webhook de Telegram usando ese mismo secret token para que el endpoint rechace llamadas no autorizadas.
 
 ## Seguridad minima recomendada
 

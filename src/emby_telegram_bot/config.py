@@ -32,6 +32,7 @@ class Settings:
     playback_with_image: bool
     playback_style: str
     app_timezone: str
+    telegram_webhook_secret: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -44,6 +45,7 @@ class Settings:
         playback_with_image_raw = os.getenv("PLAYBACK_WITH_IMAGE", "false").strip().lower()
         playback_style = os.getenv("PLAYBACK_STYLE", "compact").strip().lower()
         app_timezone = os.getenv("APP_TIMEZONE", "Europe/Madrid").strip()
+        telegram_webhook_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
@@ -99,4 +101,5 @@ class Settings:
             playback_with_image=playback_with_image,
             playback_style=playback_style,
             app_timezone=app_timezone,
+            telegram_webhook_secret=telegram_webhook_secret,
         )

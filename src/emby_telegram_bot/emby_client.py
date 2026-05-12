@@ -23,8 +23,94 @@ class EmbyClient:
     def get_item_info(self, item_id: str) -> dict[str, Any]:
         return self._get(
             f"Items/{item_id}",
-            params={"Fields": "MediaStreams,MediaSources,Path,Container,Size"},
+            params={"Fields": "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,Overview"},
         ).json()
+
+    def get_item_by_id(self, item_id: str) -> dict[str, Any]:
+        item_id = item_id.strip()
+        if not item_id:
+            return {}
+        try:
+            return self.get_item_info(item_id)
+        except Exception:
+            logging.debug("Direct item lookup failed for item=%s; trying Items?Ids fallback", item_id)
+
+        payload = self._get(
+            "Items",
+            params={
+                "Ids": item_id,
+                "Recursive": "true",
+                "Fields": "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,Overview",
+            },
+        ).json()
+        items = payload.get("Items", [])
+        if isinstance(items, list) and items and isinstance(items[0], dict):
+            return items[0]
+        return {}
+
+    def search_items(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        query = query.strip()
+        if not query:
+            return []
+
+        payload = self._get(
+            "Items",
+            params={
+                "SearchTerm": query,
+                "IncludeItemTypes": "Movie,Series",
+                "Recursive": "true",
+                "Limit": limit,
+                "Fields": "ProductionYear,Overview",
+            },
+        ).json()
+        items = payload.get("Items", [])
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
+
+    def get_series_seasons(self, series_id: str) -> list[dict[str, Any]]:
+        try:
+            payload = self._get(
+                f"Shows/{series_id}/Seasons",
+                params={"Fields": "ChildCount,IndexNumber"},
+            ).json()
+        except Exception:
+            logging.debug("Shows seasons lookup failed for series=%s; trying Items fallback", series_id)
+            payload = self._get(
+                "Items",
+                params={
+                    "ParentId": series_id,
+                    "IncludeItemTypes": "Season",
+                    "Recursive": "false",
+                    "Fields": "ChildCount,IndexNumber",
+                },
+            ).json()
+        items = payload.get("Items", [])
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
+
+    def get_season_episodes(self, series_id: str, season_id: str) -> list[dict[str, Any]]:
+        try:
+            payload = self._get(
+                f"Shows/{series_id}/Episodes",
+                params={"SeasonId": season_id, "Fields": "IndexNumber,ParentIndexNumber"},
+            ).json()
+        except Exception:
+            logging.debug("Shows episodes lookup failed for season=%s; trying Items fallback", season_id)
+            payload = self._get(
+                "Items",
+                params={
+                    "ParentId": season_id,
+                    "IncludeItemTypes": "Episode",
+                    "Recursive": "true",
+                    "Fields": "IndexNumber,ParentIndexNumber",
+                },
+            ).json()
+        items = payload.get("Items", [])
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
 
     def fetch_image(self, item_id: str | None) -> bytes | None:
         if not item_id:

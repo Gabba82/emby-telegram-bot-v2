@@ -14,6 +14,8 @@ from .episode_aggregator import EpisodeAggregator
 from .formatting import (
     build_activity_caption,
     build_caption,
+    build_search_item_caption,
+    build_search_results_message,
     infer_activity_event_code,
     is_activity_payload,
 )
@@ -45,6 +47,7 @@ def create_app(settings: Settings) -> Flask:
     telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
     playback_targets = settings.playback_chat_ids or settings.chat_ids
     library_targets = settings.library_chat_ids or settings.chat_ids
+    allowed_telegram_chats = set(settings.chat_ids + settings.library_chat_ids + settings.playback_chat_ids)
     recent_playback: dict[tuple[str, str], float] = {}
     playback_lock = threading.Lock()
 
@@ -101,6 +104,149 @@ def create_app(settings: Settings) -> Flask:
         caption = build_caption(sample_item, season_mode=True, episode_list=episode_list)
         image = emby.get_item_image(sample_item)
         telegram.send(caption, image, chat_ids=library_targets)
+
+    def _is_authorized_chat(chat_id: str) -> bool:
+        return chat_id in allowed_telegram_chats
+
+    def _send_search_results(chat_id: str, query: str, with_images: bool = False) -> None:
+        clean_query = query.strip()
+        if len(clean_query) < 2:
+            telegram.send_text("Escribe al menos 2 caracteres para buscar.", chat_ids=[chat_id])
+            return
+        try:
+            items = emby.search_items(clean_query)
+        except Exception as exc:
+            logging.error("Emby search failed query=%s error=%s", clean_query, exc)
+            telegram.send_text("No he podido consultar Emby ahora mismo. Revisa logs y conexion.", chat_ids=[chat_id])
+            return
+        if with_images and items:
+            if len(items) == 1:
+                _send_search_item(chat_id, items[0])
+                return
+            telegram.send_search_selection_menu(chat_id, clean_query, items)
+            return
+        telegram.send_text(build_search_results_message(clean_query, items), chat_ids=[chat_id])
+
+    def _send_search_item(chat_id: str, item: dict[str, Any], fetch_details: bool = True) -> None:
+        item_id = item.get("Id")
+        if item_id and fetch_details:
+            try:
+                detailed_item = emby.get_item_by_id(str(item_id))
+                if detailed_item:
+                    item = detailed_item
+            except Exception as exc:
+                logging.warning("Cannot fetch selected item id=%s error=%s", item_id, exc)
+        series_seasons = []
+        if item.get("Type") == "Series" and item.get("Id"):
+            try:
+                series_seasons = emby.get_series_seasons(str(item["Id"]))
+                for season in series_seasons:
+                    season_id = season.get("Id")
+                    if season_id:
+                        season["Episodes"] = emby.get_season_episodes(str(item["Id"]), str(season_id))
+            except Exception as exc:
+                logging.warning("Cannot fetch series availability id=%s error=%s", item.get("Id"), exc)
+        image = emby.get_item_image(item)
+        telegram.send(build_search_item_caption(item, series_seasons=series_seasons), image, chat_ids=[chat_id])
+
+    def _handle_telegram_message(message: dict[str, Any]) -> None:
+        chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+        chat_id = str(chat.get("id") or "")
+        user = message.get("from") if isinstance(message.get("from"), dict) else {}
+        private_chat_id = str(user.get("id") or "")
+        is_private_chat = chat.get("type") == "private"
+        reply_to_message = message.get("reply_to_message") if isinstance(message.get("reply_to_message"), dict) else {}
+        reply_text = str(reply_to_message.get("text") or "")
+        is_search_reply = is_private_chat and reply_text.startswith("Escribe el titulo de la pelicula o serie")
+
+        text = str(message.get("text") or "").strip()
+        if not text:
+            return
+
+        command, _, arg = text.partition(" ")
+        command = command.split("@", 1)[0].lower()
+        is_private_menu_command = is_private_chat and command in {"/start", "/menu"}
+
+        if not chat_id or (not _is_authorized_chat(chat_id) and not is_search_reply and not is_private_menu_command):
+            logging.warning("Telegram update ignored from unauthorized chat_id=%s", chat_id or "unknown")
+            return
+
+        if text == "🔎 Buscar pelicula o serie":
+            telegram.request_search_query(chat_id)
+            return
+        if command in {"/start", "/menu"}:
+            if is_private_chat:
+                telegram.send_private_search_keyboard(chat_id)
+                return
+            telegram.send_search_menu(chat_id)
+            return
+        if command == "/buscar":
+            target_chat_id = chat_id if is_private_chat else private_chat_id
+            if not target_chat_id:
+                return
+            if not arg.strip():
+                telegram.request_search_query(target_chat_id)
+                return
+            _send_search_results(target_chat_id, arg, with_images=True)
+            return
+
+        if is_search_reply:
+            _send_search_results(chat_id, text, with_images=chat.get("type") == "private")
+            return
+
+        if is_private_chat:
+            _send_search_results(chat_id, text, with_images=True)
+
+    def _handle_telegram_callback(callback_query: dict[str, Any]) -> None:
+        callback_id = str(callback_query.get("id") or "")
+        message = callback_query.get("message") if isinstance(callback_query.get("message"), dict) else {}
+        chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+        chat_id = str(chat.get("id") or "")
+        user = callback_query.get("from") if isinstance(callback_query.get("from"), dict) else {}
+        private_chat_id = str(user.get("id") or "")
+        callback_data = str(callback_query.get("data") or "")
+
+        is_private_selection = chat.get("type") == "private" and callback_data.startswith("search:item:")
+        if not chat_id or (not _is_authorized_chat(chat_id) and not is_private_selection):
+            if callback_id:
+                telegram.answer_callback_query(callback_id)
+            logging.warning("Telegram callback ignored from unauthorized chat_id=%s", chat_id or "unknown")
+            return
+
+        if callback_data.startswith("search:item:"):
+            item_id = callback_data.removeprefix("search:item:")
+            if callback_id:
+                telegram.answer_callback_query(callback_id, "Preparando ficha...")
+            try:
+                item = emby.get_item_by_id(item_id)
+            except Exception as exc:
+                logging.error("Cannot fetch selected search item id=%s error=%s", item_id, exc)
+                telegram.send_text("No he podido cargar ese resultado ahora mismo.", chat_ids=[chat_id])
+                return
+            if not item:
+                logging.error("Selected search item id=%s returned no details", item_id)
+                telegram.send_text("No he podido cargar ese resultado ahora mismo.", chat_ids=[chat_id])
+                return
+            _send_search_item(chat_id, item, fetch_details=False)
+            return
+
+        if callback_data == "search:start":
+            if chat.get("type") == "private":
+                if callback_id:
+                    telegram.answer_callback_query(callback_id)
+                telegram.request_search_query(chat_id)
+                return
+            if private_chat_id:
+                telegram.request_search_query(private_chat_id)
+                if callback_id:
+                    telegram.answer_callback_query(
+                        callback_id,
+                        "Te he escrito por privado. Si no llega, abre el bot y pulsa Iniciar.",
+                        show_alert=True,
+                    )
+                return
+        if callback_id:
+            telegram.answer_callback_query(callback_id)
 
     aggregator = EpisodeAggregator(
         flush_delay_seconds=settings.episode_buffer_seconds,
@@ -170,6 +316,29 @@ def create_app(settings: Settings) -> Flask:
             return "", 200
 
         logging.info("Ignored non-media event: %s", payload.get("Event") or "unknown")
+        return "", 200
+
+    @app.post("/telegramhook")
+    def telegramhook() -> tuple[str, int]:
+        if settings.telegram_webhook_secret:
+            received_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+            if received_secret != settings.telegram_webhook_secret:
+                logging.warning("Telegram webhook rejected because secret token did not match")
+                return "", 403
+
+        payload = request.get_json(silent=True) or {}
+        message = payload.get("message") if isinstance(payload.get("message"), dict) else None
+        callback_query = (
+            payload.get("callback_query") if isinstance(payload.get("callback_query"), dict) else None
+        )
+
+        if message:
+            _handle_telegram_message(message)
+        elif callback_query:
+            _handle_telegram_callback(callback_query)
+        else:
+            logging.info("Ignored unsupported Telegram update")
+
         return "", 200
 
     return app

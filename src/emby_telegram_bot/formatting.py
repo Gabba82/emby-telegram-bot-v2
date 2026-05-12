@@ -298,3 +298,143 @@ def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list:
     if specs:
         caption += f"\n{SECTION_DIVIDER}\n{specs}"
     return caption
+
+
+def build_search_results_message(query: str, items: list[dict[str, Any]]) -> str:
+    clean_query = query.strip()
+    if not items:
+        return f"🔎 Busqueda: {clean_query}\n\nNo he encontrado peliculas ni series con ese texto."
+
+    lines = [f"🔎 Busqueda: {clean_query}", ""]
+    for index, item in enumerate(items, start=1):
+        item_type = item.get("Type")
+        icon = "🎬" if item_type == "Movie" else "📺" if item_type == "Series" else "🆕"
+        label = "Pelicula" if item_type == "Movie" else "Serie" if item_type == "Series" else "Contenido"
+        name = item.get("Name") or "Sin titulo"
+        year = item.get("ProductionYear")
+        suffix = f" ({year})" if year else ""
+        lines.append(f"{index}. {icon} {label}: {name}{suffix}")
+    return "\n".join(lines)
+
+
+def _audio_label(stream: dict[str, Any]) -> str:
+    language = _first_str(stream.get("Language"), stream.get("DisplayLanguage"), stream.get("Title"))
+    codec = _first_str(stream.get("Codec")).upper()
+    channels = stream.get("Channels")
+    channel_label = f"{channels}ch" if channels else ""
+    return _join_known([language, codec, channel_label])
+
+
+def _format_audio_streams(media_source: dict[str, Any], max_items: int = 3) -> str:
+    streams = media_source.get("MediaStreams")
+    if not isinstance(streams, list):
+        return ""
+    audio = [
+        _audio_label(stream)
+        for stream in streams
+        if isinstance(stream, dict) and (stream.get("Type") or "").lower() == "audio"
+    ]
+    audio = [item for item in audio if item]
+    if not audio:
+        return ""
+    shown = audio[:max_items]
+    if len(audio) > max_items:
+        shown.append(f"+{len(audio) - max_items}")
+    return ", ".join(shown)
+
+
+def _format_movie_versions(item: dict[str, Any], max_versions: int = 4) -> list[str]:
+    media_sources = item.get("MediaSources")
+    if not isinstance(media_sources, list) or not media_sources:
+        return []
+
+    valid_sources = [s for s in media_sources if isinstance(s, dict)]
+    if not valid_sources:
+        return []
+
+    lines = ["Datos de la version:" if len(valid_sources) == 1 else "Versiones disponibles:"]
+    for index, source in enumerate(valid_sources[:max_versions], start=1):
+        path = _first_str(source.get("Path"), source.get("Name"), item.get("Path"), item.get("Name"))
+        resolution = resolution_from_filename(path)
+        if not _is_known(resolution):
+            resolution = _resolution_from_media_streams(item, source)
+        container = _first_str(source.get("Container"), item.get("Container")).upper() or "?"
+        size = _size_to_gib(source.get("Size") or item.get("Size"))
+        audio = _format_audio_streams(source)
+        details = _join_known([resolution, container, size])
+        line = f"{index}. {details}" if details else f"{index}. Version"
+        if audio:
+            line += f" | Audio: {audio}"
+        lines.append(line)
+    if len(valid_sources) > max_versions:
+        lines.append(f"... +{len(valid_sources) - max_versions} versiones mas")
+    return lines
+
+
+def _format_series_availability(seasons: list[dict[str, Any]], max_seasons: int = 8) -> list[str]:
+    if not seasons:
+        return []
+    lines = ["Temporadas disponibles:"]
+    for season in seasons[:max_seasons]:
+        season_number = season.get("IndexNumber")
+        try:
+            season_number = int(season_number)
+        except Exception:
+            season_number = 0
+        episodes = season.get("Episodes")
+        episode_numbers = []
+        if isinstance(episodes, list):
+            for episode in episodes:
+                if not isinstance(episode, dict):
+                    continue
+                try:
+                    episode_number = int(episode.get("IndexNumber") or 0)
+                except Exception:
+                    episode_number = 0
+                if episode_number:
+                    episode_numbers.append(episode_number)
+        episode_numbers = sorted(set(episode_numbers))
+        if episode_numbers:
+            episode_tags = [f"E{episode:02}" for episode in episode_numbers]
+            episodes_text = _format_episode_list(episode_tags, max_items=10)
+            lines.append(f"T{season_number:02}: {episodes_text}")
+            continue
+        child_count = season.get("ChildCount")
+        suffix = f"{child_count} episodios" if child_count else "episodios disponibles"
+        lines.append(f"T{season_number:02}: {suffix}")
+    if len(seasons) > max_seasons:
+        lines.append(f"... +{len(seasons) - max_seasons} temporadas mas")
+    return lines
+
+
+def _trim_caption(caption: str, max_length: int = 1000) -> str:
+    if len(caption) <= max_length:
+        return caption
+    return caption[: max_length - 3].rstrip() + "..."
+
+
+def build_search_item_caption(
+    item: dict[str, Any],
+    series_seasons: list[dict[str, Any]] | None = None,
+) -> str:
+    item_type = item.get("Type")
+    icon = "🎬" if item_type == "Movie" else "📺" if item_type == "Series" else "🆕"
+    label = "Pelicula" if item_type == "Movie" else "Serie" if item_type == "Series" else "Contenido"
+    name = item.get("Name") or "Sin titulo"
+    year = item.get("ProductionYear")
+    caption = f"{icon} {label}: {name}"
+    if year:
+        caption += f" ({year})"
+    overview = _first_str(item.get("Overview"))
+    if overview:
+        caption += f"\n\n{overview[:450]}"
+        if len(overview) > 450:
+            caption += "..."
+    extra_lines = []
+    if item_type == "Movie":
+        extra_lines = _format_movie_versions(item)
+    elif item_type == "Series" and series_seasons:
+        extra_lines = _format_series_availability(series_seasons)
+    if extra_lines:
+        caption += f"\n\n{SECTION_DIVIDER}\n" + "\n".join(extra_lines)
+    return _trim_caption(caption)
