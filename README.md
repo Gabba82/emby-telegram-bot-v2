@@ -65,6 +65,290 @@ Respuesta esperada:
 
 Este despliegue usa `gunicorn` en Docker (servidor WSGI de produccion).
 
+## Despliegue en produccion con dominio HTTPS
+
+Esta es la configuracion recomendada para usar el bot de forma estable sin ngrok.
+
+### 1. Preparar `.env`
+
+Crea el archivo:
+
+```bash
+cp .env.example .env
+```
+
+Edita `.env`:
+
+```bash
+nano .env
+```
+
+Ejemplo:
+
+```env
+TELEGRAM_TOKEN=token_real_de_botfather
+CHAT_IDS=-1001234567890
+LIBRARY_CHAT_IDS=-1001234567890
+PLAYBACK_CHAT_IDS=-1001234567890
+EMBY_API_URL=https://emby.tudominio.duckdns.org/emby
+EMBY_API_KEY=api_key_real_de_emby
+REQUEST_TIMEOUT_SECONDS=15
+EPISODE_BUFFER_SECONDS=60
+PLAYBACK_DEBOUNCE_SECONDS=10
+ENABLE_LIBRARY_NOTIFICATIONS=true
+ENABLE_PLAYBACK_NOTIFICATIONS=true
+PLAYBACK_NOTIFY_PAUSE=false
+PLAYBACK_WITH_IMAGE=false
+PLAYBACK_STYLE=compact
+APP_TIMEZONE=Europe/Madrid
+TELEGRAM_WEBHOOK_SECRET=un_secreto_simple_igual_en_telegram
+```
+
+Notas:
+
+- `CHAT_IDS` debe ser el ID del grupo/chat autorizado. En grupos suele empezar por `-100`.
+- `TELEGRAM_WEBHOOK_SECRET` puede ser cualquier texto, pero debe coincidir exactamente con el `secret_token` configurado en Telegram.
+- Si no quieres usar secreto durante pruebas, deja `TELEGRAM_WEBHOOK_SECRET=` vacio y configura Telegram sin `secret_token`.
+
+### 2. Levantar Docker
+
+```bash
+docker compose up -d --build
+```
+
+Comprueba que esta vivo:
+
+```bash
+docker compose ps
+curl http://localhost:8081/health
+```
+
+Respuesta correcta:
+
+```json
+{"status":"ok"}
+```
+
+### 3. Configurar proxy inverso HTTPS
+
+Telegram necesita una URL publica con HTTPS. Si usas Nginx Proxy Manager, Caddy, Nginx o similar, crea un proxy:
+
+```text
+https://embybot.tudominio.duckdns.org  ->  http://IP_DEL_SERVIDOR:8081
+```
+
+Ejemplo:
+
+```text
+https://embybot.tudominio.duckdns.org  ->  http://192.168.1.112:8081
+```
+
+No hace falta crear rutas especiales para `/telegramhook` o `/embyhook` si todo el dominio ya apunta al bot.
+
+Activa SSL/HTTPS en el proxy y comprueba desde fuera:
+
+```bash
+curl https://embybot.tudominio.duckdns.org/health
+```
+
+Debe responder:
+
+```json
+{"status":"ok"}
+```
+
+Si usas DuckDNS y Telegram no resuelve el host, prueba con un dominio directo tipo:
+
+```text
+embybottudominio.duckdns.org
+```
+
+en vez de un sub-subdominio tipo:
+
+```text
+embybot.tudominio.duckdns.org
+```
+
+### 4. Configurar webhook de Telegram
+
+Primero comprueba que el token funciona:
+
+```bash
+curl "https://api.telegram.org/botTU_TOKEN/getMe"
+```
+
+Debe devolver `"ok": true`.
+
+Configura el webhook con secreto:
+
+```bash
+curl -X POST "https://api.telegram.org/botTU_TOKEN/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://embybot.tudominio.duckdns.org/telegramhook","secret_token":"EL_MISMO_SECRETO_DEL_ENV"}'
+```
+
+Si dejaste `TELEGRAM_WEBHOOK_SECRET=` vacio, usa:
+
+```bash
+curl "https://api.telegram.org/botTU_TOKEN/setWebhook?url=https://embybot.tudominio.duckdns.org/telegramhook"
+```
+
+Comprueba:
+
+```bash
+curl "https://api.telegram.org/botTU_TOKEN/getWebhookInfo"
+```
+
+Debe aparecer:
+
+```json
+"url":"https://embybot.tudominio.duckdns.org/telegramhook"
+```
+
+### 5. Configurar webhook en Emby
+
+En Emby, configura el webhook hacia:
+
+```text
+https://embybot.tudominio.duckdns.org/embyhook
+```
+
+Eventos recomendados:
+
+- Nuevo contenido de biblioteca.
+- Playback start/stop/unpause si quieres eventos de reproduccion.
+- Pause solo si no te molesta recibir mas mensajes.
+
+### 6. Probar el bot
+
+En Telegram:
+
+1. Abre el bot en privado.
+2. Pulsa `Iniciar`.
+3. Escribe `/start` o `/menu`.
+4. Debe aparecer el boton fijo `Buscar pelicula o serie`.
+5. Busca una pelicula o serie.
+
+En el grupo:
+
+1. Anade el bot al grupo.
+2. Asegurate de que el `chat_id` del grupo esta en `.env`.
+3. Como admin, escribe `/menu`.
+4. Fija el mensaje con el boton `Buscar por privado`.
+
+Cada usuario debe iniciar antes el bot en privado. Telegram no permite que un bot escriba primero a un usuario si ese usuario nunca pulso `Iniciar`.
+
+### 7. Comandos utiles de mantenimiento
+
+Ver estado:
+
+```bash
+docker compose ps
+```
+
+Ver logs:
+
+```bash
+docker compose logs -f
+```
+
+Reiniciar sin reconstruir:
+
+```bash
+docker compose restart
+```
+
+Reconstruir despues de actualizar codigo o `.env`:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+Actualizar desde GitHub:
+
+```bash
+git pull
+docker compose down
+docker compose up -d --build
+```
+
+## Diagnostico rapido
+
+### `/health` funciona local, pero no por dominio
+
+El problema esta en el proxy, DNS o SSL.
+
+Comprueba:
+
+```bash
+curl http://localhost:8081/health
+curl https://embybot.tudominio.duckdns.org/health
+```
+
+### Telegram sigue apuntando a ngrok o a una URL antigua
+
+Comprueba:
+
+```bash
+curl "https://api.telegram.org/botTU_TOKEN/getWebhookInfo"
+```
+
+Si la URL no es la correcta, vuelve a ejecutar `setWebhook`.
+
+### Error `401 Unauthorized`
+
+El token de Telegram esta mal. Compruebalo con:
+
+```bash
+curl "https://api.telegram.org/botTU_TOKEN/getMe"
+```
+
+### Error `403 FORBIDDEN` o log `secret token did not match`
+
+El secreto de Telegram no coincide con `.env`.
+
+Comprueba:
+
+```bash
+grep TELEGRAM_WEBHOOK_SECRET .env
+```
+
+El valor debe ser exactamente el mismo que `secret_token` en `setWebhook`.
+
+### Error `Failed to resolve host`
+
+Telegram no puede resolver el dominio. Comprueba DNS:
+
+```bash
+nslookup embybot.tudominio.duckdns.org 1.1.1.1
+```
+
+Si usas DuckDNS, puede ser mejor crear un dominio directo `nombre.duckdns.org`.
+
+### Error `bot can't initiate conversation with a user`
+
+El usuario pulso el boton desde el grupo, pero nunca inicio el bot en privado.
+
+Solucion:
+
+1. El usuario abre el bot.
+2. Pulsa `Iniciar`.
+3. Vuelve al grupo.
+4. Pulsa `Buscar por privado`.
+
+### Logs con muchos `404` en `/`, `/.env`, `/graphql`, etc.
+
+Son escaneos normales de internet. La app solo usa:
+
+```text
+/health
+/telegramhook
+/embyhook
+```
+
+Mientras `/health` devuelva `200` y los webhooks devuelvan `200`, esta bien.
+
 ## Configuracion paso a paso (detallada para principiantes)
 
 Consulta la guia completa:
