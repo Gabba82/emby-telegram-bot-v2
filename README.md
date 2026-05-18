@@ -96,6 +96,7 @@ EMBY_API_URL=https://emby.tudominio.duckdns.org/emby
 EMBY_API_KEY=api_key_real_de_emby
 REQUEST_TIMEOUT_SECONDS=15
 EPISODE_BUFFER_SECONDS=60
+LIBRARY_DEBOUNCE_SECONDS=120
 PLAYBACK_DEBOUNCE_SECONDS=10
 ENABLE_LIBRARY_NOTIFICATIONS=true
 ENABLE_PLAYBACK_NOTIFICATIONS=true
@@ -292,6 +293,12 @@ Comprueba en este orden:
 
 Los logs del bot muestran `raw_event` y `normalized_event`; si Emby envia `PlaybackStart`, debe aparecer `normalized_event=playback.start`.
 
+### Las altas de biblioteca llegan duplicadas
+
+Si ves dos entradas muy juntas para el mismo `item_id`, normalmente hay dos webhooks de Emby apuntando al bot o dos rutas distintas llegando a `/embyhook` (por ejemplo una interna y otra por proxy). Revisa en Emby que solo haya un webhook activo hacia el bot.
+
+Como proteccion adicional, `LIBRARY_DEBOUNCE_SECONDS` evita reenviar el mismo item de biblioteca dentro de esa ventana. Por defecto son `120` segundos.
+
 ### `/health` funciona local, pero no por dominio
 
 El problema esta en el proxy, DNS o SSL.
@@ -393,6 +400,7 @@ Ejemplo completo en `.env.example`.
 - `EMBY_API_KEY`: API key de Emby.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
 - `EPISODE_BUFFER_SECONDS`: segundos para agrupar episodios.
+- `LIBRARY_DEBOUNCE_SECONDS`: ventana anti-duplicado para altas de biblioteca con el mismo item de Emby. Util si Emby o el proxy mandan el mismo webhook por dos caminos.
 - `PLAYBACK_DEBOUNCE_SECONDS`: ventana anti-duplicado para eventos `playback.*` (excepto `playback.stop`).
 - `ENABLE_LIBRARY_NOTIFICATIONS`: activa/desactiva notificaciones de biblioteca.
 - `ENABLE_PLAYBACK_NOTIFICATIONS`: activa/desactiva notificaciones de reproduccion/sesion.

@@ -26,6 +26,7 @@ class Settings:
     emby_api_key: str
     request_timeout_seconds: int
     episode_buffer_seconds: int
+    library_debounce_seconds: int
     playback_debounce_seconds: int
     enable_library_notifications: bool
     enable_playback_notifications: bool
@@ -51,6 +52,7 @@ class Settings:
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
+        library_debounce_raw = os.getenv("LIBRARY_DEBOUNCE_SECONDS", "120").strip()
         playback_debounce_raw = os.getenv("PLAYBACK_DEBOUNCE_SECONDS", "10").strip()
         enable_library_notifications = _parse_bool(os.getenv("ENABLE_LIBRARY_NOTIFICATIONS", ""), True)
         enable_playback_notifications = _parse_bool(os.getenv("ENABLE_PLAYBACK_NOTIFICATIONS", ""), True)
@@ -66,16 +68,20 @@ class Settings:
         try:
             request_timeout_seconds = int(timeout_raw)
             episode_buffer_seconds = int(buffer_raw)
+            library_debounce_seconds = int(library_debounce_raw)
             playback_debounce_seconds = int(playback_debounce_raw)
         except ValueError as exc:
             raise ValueError(
-                "REQUEST_TIMEOUT_SECONDS, EPISODE_BUFFER_SECONDS and PLAYBACK_DEBOUNCE_SECONDS must be integers"
+                "REQUEST_TIMEOUT_SECONDS, EPISODE_BUFFER_SECONDS, LIBRARY_DEBOUNCE_SECONDS "
+                "and PLAYBACK_DEBOUNCE_SECONDS must be integers"
             ) from exc
 
         if request_timeout_seconds <= 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than 0")
         if episode_buffer_seconds <= 0:
             raise ValueError("EPISODE_BUFFER_SECONDS must be greater than 0")
+        if library_debounce_seconds < 0:
+            raise ValueError("LIBRARY_DEBOUNCE_SECONDS must be >= 0")
         if playback_debounce_seconds < 0:
             raise ValueError("PLAYBACK_DEBOUNCE_SECONDS must be >= 0")
         if playback_style not in {"compact", "detailed"}:
@@ -97,6 +103,7 @@ class Settings:
             emby_api_key=emby_api_key,
             request_timeout_seconds=request_timeout_seconds,
             episode_buffer_seconds=episode_buffer_seconds,
+            library_debounce_seconds=library_debounce_seconds,
             playback_debounce_seconds=playback_debounce_seconds,
             enable_library_notifications=enable_library_notifications,
             enable_playback_notifications=enable_playback_notifications,

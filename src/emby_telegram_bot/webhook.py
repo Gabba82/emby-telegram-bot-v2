@@ -52,7 +52,9 @@ def create_app(settings: Settings) -> Flask:
         settings.chat_ids + settings.admin_chat_ids + settings.library_chat_ids + settings.playback_chat_ids
     )
     recent_playback: dict[tuple[str, str], float] = {}
+    recent_library: dict[str, float] = {}
     playback_lock = threading.Lock()
+    library_lock = threading.Lock()
 
     def _should_send_playback_event(payload: dict[str, Any], activity_item: dict[str, Any]) -> bool:
         event_code = infer_activity_event_code(payload)
@@ -101,6 +103,26 @@ def create_app(settings: Settings) -> Flask:
                 )
                 return False
             recent_playback[key] = now
+        return True
+
+    def _should_send_library_event(item: dict[str, Any], item_id: str | None) -> bool:
+        if settings.library_debounce_seconds == 0:
+            return True
+        item_key = str(item_id or item.get("Id") or item.get("Name") or "unknown_item")
+        item_type = str(item.get("Type") or "unknown_type")
+        key = f"{item_type}:{item_key}"
+        now = time.time()
+        with library_lock:
+            previous = recent_library.get(key, 0.0)
+            if now - previous < settings.library_debounce_seconds:
+                logging.info(
+                    "Library event debounced for item=%s type=%s (window=%ss)",
+                    item_key,
+                    item_type,
+                    settings.library_debounce_seconds,
+                )
+                return False
+            recent_library[key] = now
         return True
 
     def flush_episode_group(sample_item: dict[str, Any], episode_list: list[str]) -> None:
@@ -518,6 +540,9 @@ def create_app(settings: Settings) -> Flask:
         if item:
             if not settings.enable_library_notifications:
                 logging.info("Library notifications disabled; skipping media notification")
+                return "", 200
+
+            if not _should_send_library_event(item, item_id):
                 return "", 200
 
             if item.get("Type") == "Episode":

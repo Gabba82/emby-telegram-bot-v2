@@ -13,6 +13,7 @@ def _settings(secret: str = "") -> Settings:
         emby_api_key="key",
         request_timeout_seconds=15,
         episode_buffer_seconds=60,
+        library_debounce_seconds=120,
         playback_debounce_seconds=10,
         enable_library_notifications=True,
         enable_playback_notifications=True,
@@ -321,3 +322,20 @@ def test_embyhook_accepts_pascal_case_playback_event(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Reproduccion iniciada" in _FakeTelegramClient.latest.sent_media[0][0]
     assert _FakeTelegramClient.latest.sent_media[0][2] == ["-1001"]
+
+
+def test_embyhook_debounces_duplicate_library_event(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+    payload = {
+        "Event": "library.new",
+        "Item": {"Id": "movie-1", "Type": "Movie", "Name": "Arrival"},
+    }
+
+    first_response = app.test_client().post("/embyhook", json=payload)
+    second_response = app.test_client().post("/embyhook", json=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert len(_FakeTelegramClient.latest.sent_media) == 1
