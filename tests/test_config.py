@@ -13,6 +13,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_required_env(monkeypatch)
     settings = Settings.from_env()
     assert settings.chat_ids == ["-1001", "-1002"]
+    assert settings.admin_chat_ids == []
     assert settings.library_chat_ids == []
     assert settings.playback_chat_ids == []
     assert settings.playback_debounce_seconds == 10
@@ -25,6 +26,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_settings_optional_targets_and_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_required_env(monkeypatch)
     monkeypatch.setenv("LIBRARY_CHAT_IDS", "-2001")
+    monkeypatch.setenv("ADMIN_CHAT_IDS", "42")
     monkeypatch.setenv("PLAYBACK_CHAT_IDS", "-3001,-3002")
     monkeypatch.setenv("PLAYBACK_DEBOUNCE_SECONDS", "5")
     monkeypatch.setenv("ENABLE_LIBRARY_NOTIFICATIONS", "false")
@@ -34,6 +36,7 @@ def test_settings_optional_targets_and_flags(monkeypatch: pytest.MonkeyPatch) ->
 
     settings = Settings.from_env()
     assert settings.library_chat_ids == ["-2001"]
+    assert settings.admin_chat_ids == ["42"]
     assert settings.playback_chat_ids == ["-3001", "-3002"]
     assert settings.playback_debounce_seconds == 5
     assert settings.enable_library_notifications is False

@@ -20,10 +20,21 @@ class EmbyClient:
         response.raise_for_status()
         return response
 
+    def validate_credentials(self) -> str:
+        payload = self._get("System/Info").json()
+        server_name = payload.get("ServerName") or payload.get("LocalAddress") or "Emby"
+        version = payload.get("Version")
+        return f"{server_name} {version}".strip()
+
     def get_item_info(self, item_id: str) -> dict[str, Any]:
         return self._get(
             f"Items/{item_id}",
-            params={"Fields": "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,Overview"},
+            params={
+                "Fields": (
+                    "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,"
+                    "Overview,CommunityRating,ProviderIds,DateCreated,SeriesInfo,ParentId"
+                )
+            },
         ).json()
 
     def get_item_by_id(self, item_id: str) -> dict[str, Any]:
@@ -40,7 +51,10 @@ class EmbyClient:
             params={
                 "Ids": item_id,
                 "Recursive": "true",
-                "Fields": "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,Overview",
+                "Fields": (
+                    "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,"
+                    "Overview,CommunityRating,ProviderIds,DateCreated,SeriesInfo,ParentId"
+                ),
             },
         ).json()
         items = payload.get("Items", [])
@@ -67,6 +81,77 @@ class EmbyClient:
         if not isinstance(items, list):
             return []
         return [item for item in items if isinstance(item, dict)]
+
+    def get_latest_added_item(self) -> dict[str, Any]:
+        items = self.get_recently_added_items(limit=1)
+        if items:
+            item_id = items[0].get("Id")
+            if item_id:
+                detailed = self.get_item_by_id(str(item_id))
+                if detailed:
+                    return detailed
+            return items[0]
+        return {}
+
+    def get_recently_added_items(self, limit: int = 10) -> list[dict[str, Any]]:
+        fetch_limit = max(limit * 5, 50)
+        payload = self._get(
+            "Items",
+            params={
+                "IncludeItemTypes": "Movie,Series,Episode",
+                "Recursive": "true",
+                "SortBy": "DateCreated",
+                "SortOrder": "Descending",
+                "Limit": fetch_limit,
+                "Fields": (
+                    "MediaStreams,MediaSources,Path,Container,Size,ProductionYear,"
+                    "Overview,CommunityRating,ProviderIds,DateCreated,SeriesInfo,ParentId"
+                ),
+            },
+        ).json()
+        items = payload.get("Items", [])
+        if not isinstance(items, list):
+            return []
+
+        collapsed_items: list[dict[str, Any]] = []
+        seen_keys: set[str] = set()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            display_item = item
+            item_type = item.get("Type")
+            item_id = str(item.get("Id") or "")
+            unique_key = f"{item_type}:{item_id}"
+
+            if item_type == "Episode":
+                series_id = str(item.get("SeriesId") or "")
+                if series_id:
+                    unique_key = f"Series:{series_id}"
+                    if unique_key in seen_keys:
+                        continue
+                    try:
+                        series_item = self.get_item_by_id(series_id)
+                        if series_item:
+                            display_item = series_item
+                    except Exception as exc:
+                        logging.warning("Cannot fetch series for recent episode series_id=%s error=%s", series_id, exc)
+                        display_item = {
+                            "Id": series_id,
+                            "Type": "Series",
+                            "Name": item.get("SeriesName") or item.get("Name") or "Serie",
+                            "ProductionYear": item.get("ProductionYear"),
+                        }
+
+            if not item_id and item_type != "Episode":
+                continue
+            if unique_key in seen_keys:
+                continue
+            seen_keys.add(unique_key)
+            collapsed_items.append(display_item)
+            if len(collapsed_items) >= limit:
+                break
+
+        return collapsed_items
 
     def get_series_seasons(self, series_id: str) -> list[dict[str, Any]]:
         try:

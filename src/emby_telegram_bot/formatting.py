@@ -158,7 +158,30 @@ def _extract_client(payload: dict[str, Any]) -> str:
 def infer_activity_event_code(payload: dict[str, Any]) -> str:
     raw_event = str(payload.get("Event") or "").strip().lower()
     if raw_event:
-        return raw_event
+        normalized_event = re.sub(r"[^a-z0-9]+", "", raw_event)
+        mapping = {
+            "playbackstart": "playback.start",
+            "playbackstarted": "playback.start",
+            "playbackstop": "playback.stop",
+            "playbackstopped": "playback.stop",
+            "playbackpause": "playback.pause",
+            "playbackpaused": "playback.pause",
+            "playbackunpause": "playback.unpause",
+            "playbackunpaused": "playback.unpause",
+            "playbackresume": "playback.unpause",
+            "playbackresumed": "playback.unpause",
+            "sessionstart": "session.start",
+            "sessionstarted": "session.start",
+            "sessionend": "session.end",
+            "sessionended": "session.end",
+            "sessionstop": "session.end",
+            "sessionstopped": "session.end",
+            "systemnotificationtest": "system.notificationtest",
+        }
+        if normalized_event in mapping:
+            return mapping[normalized_event]
+        if raw_event.startswith(("playback.", "session.", "system.")):
+            return raw_event
 
     text = " ".join(
         [

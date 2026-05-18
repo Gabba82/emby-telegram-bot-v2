@@ -6,6 +6,7 @@ def _settings(secret: str = "") -> Settings:
     return Settings(
         telegram_token="token",
         chat_ids=["-1001"],
+        admin_chat_ids=["42"],
         library_chat_ids=[],
         playback_chat_ids=[],
         emby_api_url="http://emby:8096/emby",
@@ -48,6 +49,18 @@ class _FakeEmbyClient:
     def get_item_by_id(self, item_id: str):
         return self.get_item_info(item_id)
 
+    def get_latest_added_item(self):
+        return self.get_item_info("latest-1")
+
+    def get_recently_added_items(self, limit: int = 10):
+        return [
+            {"Id": "latest-1", "Type": "Movie", "Name": "John Wick", "ProductionYear": 2014},
+            {"Id": "latest-2", "Type": "Series", "Name": "Dorohedoro"},
+        ][:limit]
+
+    def validate_credentials(self) -> str:
+        return "Emby Test 1.0"
+
     def get_series_seasons(self, series_id: str):
         return [{"Id": "season-1", "IndexNumber": 1}]
 
@@ -65,6 +78,8 @@ class _FakeTelegramClient:
         self.sent_texts = []
         self.sent_media = []
         self.selection_menus = []
+        self.resend_item_menus = []
+        self.resend_target_menus = []
         self.menus = []
         self.private_keyboards = []
         self.search_requests = []
@@ -83,6 +98,12 @@ class _FakeTelegramClient:
     def send_search_selection_menu(self, chat_id: str, query: str, items) -> None:
         self.selection_menus.append((chat_id, query, items))
 
+    def send_resend_item_menu(self, chat_id: str, items) -> None:
+        self.resend_item_menus.append((chat_id, items))
+
+    def send_resend_target_menu(self, chat_id: str, item_id: str, item_name: str, targets) -> None:
+        self.resend_target_menus.append((chat_id, item_id, item_name, targets))
+
     def send_private_search_keyboard(self, chat_id: str) -> None:
         self.private_keyboards.append(chat_id)
 
@@ -91,6 +112,9 @@ class _FakeTelegramClient:
 
     def answer_callback_query(self, callback_query_id: str, text: str = "", show_alert: bool = False) -> None:
         self.callbacks.append((callback_query_id, text, show_alert))
+
+    def validate_credentials(self) -> str:
+        return "@testbot"
 
 
 def test_telegramhook_search_command(monkeypatch) -> None:
@@ -206,3 +230,94 @@ def test_telegramhook_selected_result_sends_item_card(monkeypatch) -> None:
     assert _FakeEmbyClient.latest.item_requests
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert "Un asesino retirado" in _FakeTelegramClient.latest.sent_media[0][0]
+
+
+def test_telegramhook_reenviaultimo_shows_target_menu_to_private_admin(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/reenviaultimo"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.item_requests == ["latest-1"]
+    assert _FakeTelegramClient.latest.resend_target_menus[0][1] == "latest-1"
+    assert _FakeTelegramClient.latest.sent_media == []
+
+
+def test_telegramhook_reenvia_shows_target_menu_to_private_admin(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/reenvia 12345"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.item_requests == ["12345"]
+    assert _FakeTelegramClient.latest.resend_target_menus[0][1] == "12345"
+    assert _FakeTelegramClient.latest.sent_media == []
+
+
+def test_telegramhook_reenviar_shows_recent_item_menu(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/reenviar"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.resend_item_menus[0][0] == "42"
+    assert _FakeTelegramClient.latest.resend_item_menus[0][1][0]["Id"] == "latest-1"
+
+
+def test_telegramhook_resend_callback_sends_to_selected_target(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "callback-3",
+                "from": {"id": 42},
+                "data": "resend:to:chat:12345",
+                "message": {"chat": {"id": 42, "type": "private"}},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.item_requests == ["12345"]
+    assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
+    assert _FakeTelegramClient.latest.sent_media[0][2] == ["-1001"]
+    assert _FakeTelegramClient.latest.callbacks[0] == ("callback-3", "Reenviando...", False)
+
+
+def test_embyhook_accepts_pascal_case_playback_event(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/embyhook",
+        json={
+            "Event": "PlaybackStart",
+            "UserName": "gabba",
+            "Client": "Android TV",
+            "Item": {"Id": "item-1", "Type": "Movie", "Name": "John Wick"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Reproduccion iniciada" in _FakeTelegramClient.latest.sent_media[0][0]
+    assert _FakeTelegramClient.latest.sent_media[0][2] == ["-1001"]

@@ -47,7 +47,10 @@ def create_app(settings: Settings) -> Flask:
     telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
     playback_targets = settings.playback_chat_ids or settings.chat_ids
     library_targets = settings.library_chat_ids or settings.chat_ids
-    allowed_telegram_chats = set(settings.chat_ids + settings.library_chat_ids + settings.playback_chat_ids)
+    admin_targets = settings.admin_chat_ids or settings.chat_ids
+    allowed_telegram_chats = set(
+        settings.chat_ids + settings.admin_chat_ids + settings.library_chat_ids + settings.playback_chat_ids
+    )
     recent_playback: dict[tuple[str, str], float] = {}
     playback_lock = threading.Lock()
 
@@ -107,6 +110,130 @@ def create_app(settings: Settings) -> Flask:
 
     def _is_authorized_chat(chat_id: str) -> bool:
         return chat_id in allowed_telegram_chats
+
+    def _is_admin_private_chat(chat_id: str, is_private_chat: bool) -> bool:
+        return is_private_chat and chat_id in set(admin_targets)
+
+    def _resend_target_options(current_chat_id: str) -> list[tuple[str, str, list[str]]]:
+        options: list[tuple[str, str, list[str]]] = [
+            ("private", f"Mi privado ({current_chat_id})", [current_chat_id]),
+            ("chat", f"CHAT_IDS ({', '.join(settings.chat_ids)})", settings.chat_ids),
+        ]
+        if settings.library_chat_ids:
+            options.append(("library", f"LIBRARY_CHAT_IDS ({', '.join(settings.library_chat_ids)})", settings.library_chat_ids))
+        if settings.playback_chat_ids:
+            options.append(("playback", f"PLAYBACK_CHAT_IDS ({', '.join(settings.playback_chat_ids)})", settings.playback_chat_ids))
+        if settings.admin_chat_ids:
+            options.append(("admin", f"ADMIN_CHAT_IDS ({', '.join(settings.admin_chat_ids)})", settings.admin_chat_ids))
+
+        unique_options = []
+        seen_targets = set()
+        for key, label, chat_ids in options:
+            clean_chat_ids = [cid for cid in chat_ids if cid]
+            targets_key = tuple(clean_chat_ids)
+            if not clean_chat_ids or targets_key in seen_targets:
+                continue
+            seen_targets.add(targets_key)
+            unique_options.append((key, label, clean_chat_ids))
+        return unique_options
+
+    def _resolve_resend_targets(target_key: str, current_chat_id: str) -> list[str]:
+        for key, _, chat_ids in _resend_target_options(current_chat_id):
+            if key == target_key:
+                return chat_ids
+        return []
+
+    def _send_item_notification(chat_id: str, item: dict[str, Any], target_chat_ids: list[str] | None = None) -> None:
+        if not item:
+            telegram.send_text("No he encontrado ese contenido en Emby.", chat_ids=[chat_id])
+            return
+        targets = target_chat_ids or [chat_id]
+        item_id = item.get("Id")
+        logging.info(
+            "Manual resend requested for item_id=%s type=%s name=%s target_chat_ids=%s",
+            item_id or "unknown",
+            item.get("Type") or "unknown",
+            item.get("Name") or "unknown",
+            ",".join(targets),
+        )
+        image = emby.get_item_image(item)
+        telegram.send(build_caption(item), image, chat_ids=targets)
+
+    def _open_resend_item_menu(chat_id: str) -> None:
+        try:
+            items = emby.get_recently_added_items(limit=10)
+        except Exception as exc:
+            logging.error("Recent items lookup failed error_type=%s error=%s", type(exc).__name__, exc)
+            telegram.send_text("No he podido consultar contenido reciente en Emby.", chat_ids=[chat_id])
+            return
+        telegram.send_resend_item_menu(chat_id, items)
+
+    def _open_resend_target_menu(chat_id: str, item_id: str) -> None:
+        clean_item_id = item_id.strip()
+        if not clean_item_id:
+            telegram.send_text("Uso: /reenvia ID_DE_EMBY", chat_ids=[chat_id])
+            return
+        try:
+            item = emby.get_item_by_id(clean_item_id)
+        except Exception as exc:
+            logging.error(
+                "Manual resend item lookup failed item_id=%s error_type=%s error=%s",
+                clean_item_id,
+                type(exc).__name__,
+                exc,
+            )
+            telegram.send_text("No he podido consultar ese ID en Emby.", chat_ids=[chat_id])
+            return
+        if not item:
+            telegram.send_text("No he encontrado ese contenido en Emby.", chat_ids=[chat_id])
+            return
+        item_name = str(item.get("Name") or item.get("SeriesName") or clean_item_id)
+        telegram.send_resend_target_menu(chat_id, clean_item_id, item_name, _resend_target_options(chat_id))
+
+    def _send_latest_added(chat_id: str) -> None:
+        try:
+            item = emby.get_latest_added_item()
+        except Exception as exc:
+            logging.error("Latest added lookup failed error_type=%s error=%s", type(exc).__name__, exc)
+            telegram.send_text("No he podido consultar el ultimo contenido anadido en Emby.", chat_ids=[chat_id])
+            return
+        if not item:
+            telegram.send_text("Emby no ha devuelto ningun contenido reciente.", chat_ids=[chat_id])
+            return
+        item_id = str(item.get("Id") or "")
+        if not item_id:
+            telegram.send_text("El ultimo contenido no trae ID de Emby.", chat_ids=[chat_id])
+            return
+        item_name = str(item.get("Name") or item.get("SeriesName") or item_id)
+        telegram.send_resend_target_menu(chat_id, item_id, item_name, _resend_target_options(chat_id))
+
+    def _send_item_by_id(chat_id: str, item_id: str) -> None:
+        clean_item_id = item_id.strip()
+        if not clean_item_id:
+            telegram.send_text("Uso: /reenvia ID_DE_EMBY", chat_ids=[chat_id])
+            return
+        _open_resend_target_menu(chat_id, clean_item_id)
+
+    def _send_diagnostics(chat_id: str, is_private_chat: bool) -> None:
+        lines = [
+            "Diagnostico del bot:",
+            f"- Chat actual: {chat_id}",
+            f"- Chat privado admin: {'si' if _is_admin_private_chat(chat_id, is_private_chat) else 'no'}",
+            f"- Notificaciones biblioteca: {'activas' if settings.enable_library_notifications else 'desactivadas'}",
+            f"- Notificaciones playback: {'activas' if settings.enable_playback_notifications else 'desactivadas'}",
+            f"- Destinos biblioteca: {', '.join(library_targets)}",
+            f"- Destinos playback: {', '.join(playback_targets)}",
+        ]
+        try:
+            lines.append(f"- Emby API: ok ({emby.validate_credentials()})")
+        except Exception as exc:
+            logging.error("Emby diagnostic failed error_type=%s error=%s", type(exc).__name__, exc)
+            lines.append(f"- Emby API: error ({type(exc).__name__})")
+        try:
+            lines.append(f"- Telegram API: ok ({telegram.validate_credentials()})")
+        except Exception as exc:
+            lines.append(f"- Telegram API: error ({type(exc).__name__})")
+        telegram.send_text("\n".join(lines), chat_ids=[chat_id])
 
     def _send_search_results(chat_id: str, query: str, with_images: bool = False) -> None:
         clean_query = query.strip()
@@ -189,6 +316,33 @@ def create_app(settings: Settings) -> Flask:
                 return
             _send_search_results(target_chat_id, arg, with_images=True)
             return
+        if command in {"/reenviar", "/reenvia_menu"}:
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Manual resend menu rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            _open_resend_item_menu(chat_id)
+            return
+        if command in {"/reenviaultimo", "/lastadded"}:
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Manual latest resend rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            _send_latest_added(chat_id)
+            return
+        if command == "/reenvia":
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Manual item resend rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            _send_item_by_id(chat_id, arg)
+            return
+        if command in {"/diagnostico", "/diagnostico_playback"}:
+            if not _is_authorized_chat(chat_id):
+                logging.warning("Diagnostics rejected for unauthorized chat_id=%s", chat_id)
+                return
+            _send_diagnostics(chat_id, is_private_chat)
+            return
 
         if is_search_reply:
             _send_search_results(chat_id, text, with_images=chat.get("type") == "private")
@@ -206,11 +360,19 @@ def create_app(settings: Settings) -> Flask:
         private_chat_id = str(user.get("id") or "")
         callback_data = str(callback_query.get("data") or "")
 
-        is_private_selection = chat.get("type") == "private" and callback_data.startswith("search:item:")
+        is_search_selection = chat.get("type") == "private" and callback_data.startswith("search:item:")
+        is_resend_selection = chat.get("type") == "private" and callback_data.startswith("resend:")
+        is_private_selection = is_search_selection or is_resend_selection
         if not chat_id or (not _is_authorized_chat(chat_id) and not is_private_selection):
             if callback_id:
                 telegram.answer_callback_query(callback_id)
             logging.warning("Telegram callback ignored from unauthorized chat_id=%s", chat_id or "unknown")
+            return
+
+        if is_resend_selection and not _is_admin_private_chat(chat_id, chat.get("type") == "private"):
+            if callback_id:
+                telegram.answer_callback_query(callback_id, "No autorizado", show_alert=True)
+            logging.warning("Resend callback rejected for non-admin/private chat_id=%s", chat_id)
             return
 
         if callback_data.startswith("search:item:"):
@@ -228,6 +390,45 @@ def create_app(settings: Settings) -> Flask:
                 telegram.send_text("No he podido cargar ese resultado ahora mismo.", chat_ids=[chat_id])
                 return
             _send_search_item(chat_id, item, fetch_details=False)
+            return
+
+        if callback_data.startswith("resend:item:"):
+            item_id = callback_data.removeprefix("resend:item:")
+            if callback_id:
+                telegram.answer_callback_query(callback_id, "Elige destino...")
+            _open_resend_target_menu(chat_id, item_id)
+            return
+
+        if callback_data.startswith("resend:to:"):
+            remainder = callback_data.removeprefix("resend:to:")
+            target_key, _, item_id = remainder.partition(":")
+            if not target_key or not item_id:
+                if callback_id:
+                    telegram.answer_callback_query(callback_id, "Seleccion no valida", show_alert=True)
+                return
+            target_chat_ids = _resolve_resend_targets(target_key, chat_id)
+            if not target_chat_ids:
+                if callback_id:
+                    telegram.answer_callback_query(callback_id, "Destino no configurado", show_alert=True)
+                return
+            if callback_id:
+                telegram.answer_callback_query(callback_id, "Reenviando...")
+            try:
+                item = emby.get_item_by_id(item_id)
+            except Exception as exc:
+                logging.error(
+                    "Manual resend callback lookup failed item_id=%s error_type=%s error=%s",
+                    item_id,
+                    type(exc).__name__,
+                    exc,
+                )
+                telegram.send_text("No he podido consultar ese contenido en Emby.", chat_ids=[chat_id])
+                return
+            if not item:
+                telegram.send_text("No he encontrado ese contenido en Emby.", chat_ids=[chat_id])
+                return
+            _send_item_notification(chat_id, item, target_chat_ids=target_chat_ids)
+            telegram.send_text(f"Reenviado a: {', '.join(target_chat_ids)}", chat_ids=[chat_id])
             return
 
         if callback_data == "search:start":
@@ -260,9 +461,18 @@ def create_app(settings: Settings) -> Flask:
     @app.post("/embyhook")
     def embyhook() -> Response | tuple[str, int]:
         payload = _extract_payload(request)
-        logging.info("Webhook event received")
+        event_code = infer_activity_event_code(payload)
+        payload_item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
+        logging.info(
+            "Emby webhook received raw_event=%s normalized_event=%s item_id=%s item_type=%s",
+            payload.get("Event") or "missing",
+            event_code or "unknown",
+            payload.get("ItemId") or payload_item.get("Id") or "unknown",
+            payload_item.get("Type") or "unknown",
+        )
 
         if settings.enable_playback_notifications and is_activity_payload(payload):
+            logging.info("Processing Emby activity event normalized_event=%s", event_code or "unknown")
             activity_item = payload.get("Item") if isinstance(payload.get("Item"), dict) else {}
             activity_item_id = activity_item.get("Id") or payload.get("ItemId")
             if activity_item_id and (
@@ -289,7 +499,11 @@ def create_app(settings: Settings) -> Flask:
                     else None
                 )
                 telegram.send(activity_caption, activity_image, chat_ids=playback_targets)
+                logging.info("Playback notification sent to %s", ",".join(playback_targets))
                 return "", 200
+            logging.info("Activity event produced no caption normalized_event=%s", event_code or "unknown")
+        elif is_activity_payload(payload):
+            logging.info("Playback notifications disabled; skipping activity event")
 
         item = payload.get("Item") or {}
         item_id = item.get("Id") or payload.get("ItemId")

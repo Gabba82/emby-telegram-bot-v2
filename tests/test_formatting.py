@@ -84,6 +84,13 @@ def test_build_activity_caption_playback() -> None:
     assert "Cliente: Android TV" in caption
 
 
+def test_infer_activity_event_from_emby_pascal_case() -> None:
+    assert infer_activity_event_code({"Event": "PlaybackStart"}) == "playback.start"
+    assert infer_activity_event_code({"Event": "PlaybackStop"}) == "playback.stop"
+    assert infer_activity_event_code({"Event": "SessionStart"}) == "session.start"
+    assert is_activity_payload({"Event": "SessionStart", "UserName": "gabba"}) is True
+
+
 def test_build_activity_caption_episode_includes_series_and_code() -> None:
     payload = {
         "Event": "playback.start",

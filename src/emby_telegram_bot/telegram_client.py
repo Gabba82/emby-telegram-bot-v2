@@ -28,7 +28,14 @@ class TelegramClient:
         try:
             asyncio.run(self._send_all(formatted_caption, image_bytes, targets))
         except Exception as exc:
-            logging.error("Telegram batch send failed error=%s", exc)
+            logging.error("Telegram batch send failed error_type=%s error=%s", type(exc).__name__, exc)
+
+    def validate_credentials(self) -> str:
+        try:
+            return asyncio.run(self._get_bot_username())
+        except Exception as exc:
+            logging.error("Telegram credential validation failed error_type=%s error=%s", type(exc).__name__, exc)
+            raise
 
     def send_text(
         self,
@@ -44,7 +51,7 @@ class TelegramClient:
         try:
             asyncio.run(self._send_text_all(formatted_text, targets, reply_markup=reply_markup))
         except Exception as exc:
-            logging.error("Telegram text batch send failed error=%s", exc)
+            logging.error("Telegram text batch send failed error_type=%s error=%s", type(exc).__name__, exc)
 
     def send_search_menu(self, chat_id: str) -> None:
         keyboard = InlineKeyboardMarkup(
@@ -76,6 +83,47 @@ class TelegramClient:
             chat_ids=[chat_id],
             reply_markup=keyboard,
         )
+
+    def send_resend_item_menu(self, chat_id: str, items: list[dict[str, Any]]) -> None:
+        buttons = []
+        for index, item in enumerate(items[:10], start=1):
+            item_id = str(item.get("Id") or "")
+            if not item_id:
+                continue
+            item_type = item.get("Type")
+            label_type = "Peli" if item_type == "Movie" else "Serie" if item_type == "Series" else "Episodio"
+            name = str(item.get("Name") or item.get("SeriesName") or "Sin titulo")
+            year = item.get("ProductionYear")
+            suffix = f" ({year})" if year else ""
+            label = f"{index}. {label_type}: {name}{suffix}"
+            buttons.append([InlineKeyboardButton(label[:64], callback_data=f"resend:item:{item_id}")])
+
+        if not buttons:
+            self.send_text("No he encontrado contenido reciente para reenviar.", chat_ids=[chat_id])
+            return
+
+        keyboard = InlineKeyboardMarkup(buttons)
+        self.send_text("Elige que contenido quieres reenviar:", chat_ids=[chat_id], reply_markup=keyboard)
+
+    def send_resend_target_menu(
+        self,
+        chat_id: str,
+        item_id: str,
+        item_name: str,
+        targets: list[tuple[str, str, list[str]]],
+    ) -> None:
+        buttons = []
+        for target_key, label, chat_ids in targets:
+            if not chat_ids:
+                continue
+            buttons.append([InlineKeyboardButton(label[:64], callback_data=f"resend:to:{target_key}:{item_id}")])
+
+        if not buttons:
+            self.send_text("No hay destinos configurados para reenviar.", chat_ids=[chat_id])
+            return
+
+        keyboard = InlineKeyboardMarkup(buttons)
+        self.send_text(f"Destino para reenviar '{item_name}':", chat_ids=[chat_id], reply_markup=keyboard)
 
     def send_private_search_keyboard(self, chat_id: str) -> None:
         keyboard = ReplyKeyboardMarkup(
@@ -116,7 +164,12 @@ class TelegramClient:
                             parse_mode=ParseMode.MARKDOWN_V2,
                         )
                 except Exception as exc:
-                    logging.error("Telegram send failed for chat_id=%s error=%s", chat_id, exc)
+                    logging.error(
+                        "Telegram send failed for chat_id=%s error_type=%s error=%s",
+                        chat_id,
+                        type(exc).__name__,
+                        exc,
+                    )
 
     async def _send_text_all(
         self,
@@ -134,7 +187,17 @@ class TelegramClient:
                         reply_markup=reply_markup,
                     )
                 except Exception as exc:
-                    logging.error("Telegram text send failed for chat_id=%s error=%s", chat_id, exc)
+                    logging.error(
+                        "Telegram text send failed for chat_id=%s error_type=%s error=%s",
+                        chat_id,
+                        type(exc).__name__,
+                        exc,
+                    )
+
+    async def _get_bot_username(self) -> str:
+        async with Bot(token=self._token) as bot:
+            me = await bot.get_me()
+            return f"@{me.username}" if me.username else str(me.id)
 
     async def _answer_callback_query(self, callback_query_id: str, text: str, show_alert: bool = False) -> None:
         async with Bot(token=self._token) as bot:

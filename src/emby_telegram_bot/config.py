@@ -19,6 +19,7 @@ def _parse_bool(raw: str, default: bool) -> bool:
 class Settings:
     telegram_token: str
     chat_ids: list[str]
+    admin_chat_ids: list[str]
     library_chat_ids: list[str]
     playback_chat_ids: list[str]
     emby_api_url: str
@@ -39,6 +40,7 @@ class Settings:
         telegram_token = os.getenv("TELEGRAM_TOKEN", "").strip()
         emby_api_key = os.getenv("EMBY_API_KEY", "").strip()
         chat_ids = _parse_chat_ids(os.getenv("CHAT_IDS", ""))
+        admin_chat_ids = _parse_chat_ids(os.getenv("ADMIN_CHAT_IDS", ""))
         library_chat_ids = _parse_chat_ids(os.getenv("LIBRARY_CHAT_IDS", ""))
         playback_chat_ids = _parse_chat_ids(os.getenv("PLAYBACK_CHAT_IDS", ""))
         emby_api_url = os.getenv("EMBY_API_URL", "http://emby:8096/emby").rstrip("/")
@@ -88,6 +90,7 @@ class Settings:
         return cls(
             telegram_token=telegram_token,
             chat_ids=chat_ids,
+            admin_chat_ids=admin_chat_ids,
             library_chat_ids=library_chat_ids,
             playback_chat_ids=playback_chat_ids,
             emby_api_url=emby_api_url,

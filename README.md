@@ -13,6 +13,7 @@ Este servicio recibe eventos de Emby por webhook y envia notificaciones a uno o 
 - Agrupacion de episodios por temporada en una sola notificacion (buffer temporal).
 - Eventos de reproduccion (inicio, pausa, reanudar, stop) si los activas en Emby.
 - Consultas desde Telegram con boton o comando `/buscar`.
+- Reenvio manual desde Telegram con selector grafico (`/reenviar`, `/reenviaultimo` y `/reenvia ID`).
 - Deduccion de calidad/formato usando metadata de Emby (`MediaSources/MediaStreams`) con fallback por nombre/ruta.
 - Campos desconocidos ocultos en specs (evita ruido de `N/D`).
 
@@ -88,6 +89,7 @@ Ejemplo:
 ```env
 TELEGRAM_TOKEN=token_real_de_botfather
 CHAT_IDS=-1001234567890
+ADMIN_CHAT_IDS=123456789
 LIBRARY_CHAT_IDS=-1001234567890
 PLAYBACK_CHAT_IDS=-1001234567890
 EMBY_API_URL=https://emby.tudominio.duckdns.org/emby
@@ -107,6 +109,7 @@ TELEGRAM_WEBHOOK_SECRET=un_secreto_simple_igual_en_telegram
 Notas:
 
 - `CHAT_IDS` debe ser el ID del grupo/chat autorizado. En grupos suele empezar por `-100`.
+- `ADMIN_CHAT_IDS` debe incluir tu ID privado de Telegram para usar comandos administrativos por privado.
 - `TELEGRAM_WEBHOOK_SECRET` puede ser cualquier texto, pero debe coincidir exactamente con el `secret_token` configurado en Telegram.
 - Si no quieres usar secreto durante pruebas, deja `TELEGRAM_WEBHOOK_SECRET=` vacio y configura Telegram sin `secret_token`.
 
@@ -216,7 +219,7 @@ https://embybot.tudominio.duckdns.org/embyhook
 Eventos recomendados:
 
 - Nuevo contenido de biblioteca.
-- Playback start/stop/unpause si quieres eventos de reproduccion.
+- Playback start/stop/unpause si quieres eventos de reproduccion. El bot acepta nombres tipo `PlaybackStart`, `PlaybackStop`, `SessionStart` y tambien `playback.start`.
 - Pause solo si no te molesta recibir mas mensajes.
 
 ### 6. Probar el bot
@@ -274,6 +277,20 @@ docker compose up -d --build
 ```
 
 ## Diagnostico rapido
+
+### No llegan notificaciones de reproduccion
+
+Comprueba en este orden:
+
+1. En Emby, el webhook/plugin debe apuntar a `https://TU_DOMINIO/embyhook`.
+2. Activa eventos de reproduccion en Emby: `PlaybackStart`, `PlaybackStop`, `PlaybackPause`, `PlaybackUnpause` y, si lo usas, `SessionStart`/`SessionEnd`.
+3. En `.env`, confirma `ENABLE_PLAYBACK_NOTIFICATIONS=true`.
+4. Si usas destino separado, confirma `PLAYBACK_CHAT_IDS`; si esta vacio se usa `CHAT_IDS`.
+5. Comprueba que el bot puede escribir en ese chat: no debe estar bloqueado y debe seguir dentro del grupo/canal.
+6. Mira logs: `docker compose logs -f emby-telegram-bot`.
+7. Desde un chat autorizado puedes enviar `/diagnostico_playback` para validar configuracion, Emby API y Telegram API.
+
+Los logs del bot muestran `raw_event` y `normalized_event`; si Emby envia `PlaybackStart`, debe aparecer `normalized_event=playback.start`.
 
 ### `/health` funciona local, pero no por dominio
 
@@ -369,6 +386,7 @@ Ejemplo completo en `.env.example`.
 
 - `TELEGRAM_TOKEN`: token de BotFather.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
+- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico_playback`). Si se deja vacio, se usan los `CHAT_IDS`.
 - `LIBRARY_CHAT_IDS`: opcional, destinos solo para altas de biblioteca (si vacio usa `CHAT_IDS`).
 - `PLAYBACK_CHAT_IDS`: opcional, destinos solo para eventos de reproduccion (si vacio usa `CHAT_IDS`).
 - `EMBY_API_URL`: URL base de Emby, por ejemplo `http://192.168.1.112:8096/emby`.
@@ -396,6 +414,19 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
 - En series, la ficha intenta mostrar temporadas y episodios disponibles.
 - En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano y audios; si hay varias versiones, lista cada una.
+
+## Reenvio manual tras reidentificar en Emby
+
+Configura primero tu ID privado en `ADMIN_CHAT_IDS` y abre una conversacion privada con el bot.
+
+- `/reenviar`: muestra un menu con los ultimos contenidos anadidos. Elige uno y luego elige destino.
+- `/reenviaultimo` o `/lastadded`: consulta en Emby el ultimo elemento anadido (`Movie`, `Series` o `Episode`) y muestra el selector de destino.
+- `/reenvia 12345`: carga el item con ID de Emby `12345` y muestra el selector de destino.
+- `/diagnostico_playback`: valida credenciales y muestra destinos activos para reproduccion y biblioteca.
+
+El menu de recientes muestra peliculas y series. Si Emby devuelve episodios recientes, el bot intenta agruparlos por serie para evitar reenviar capitulos uno a uno. El selector de destino usa los chats definidos en `.env`: `CHAT_IDS`, `LIBRARY_CHAT_IDS`, `PLAYBACK_CHAT_IDS`, `ADMIN_CHAT_IDS` y tu chat privado actual. Al confirmar, el bot vuelve a consultar Emby y regenera la notificacion con metadata actual.
+
+Esto esta pensado para el caso en que Emby identifico mal una pelicula/serie al entrar en biblioteca. Reidentifica manualmente en Emby, espera a que Emby guarde la metadata y ejecuta `/reenviar`, `/reenviaultimo` o `/reenvia ID` por privado.
 
 Para recibir esos mensajes, configura el webhook de Telegram apuntando a:
 
