@@ -230,7 +230,7 @@ En Telegram:
 1. Abre el bot en privado.
 2. Pulsa `Iniciar`.
 3. Escribe `/start` o `/menu`.
-4. Debe quedar disponible el menu de comandos junto al campo de escritura.
+4. Debe quedar disponible el menu de comandos junto al campo de escritura. Si no aparece, cierra y abre el chat o reinicia Telegram.
 5. Usa `/buscar` desde ese menu para buscar una pelicula o serie.
 
 En el grupo:
@@ -393,7 +393,7 @@ Ejemplo completo en `.env.example`.
 
 - `TELEGRAM_TOKEN`: token de BotFather.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
-- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico_playback`). Si se deja vacio, se usan los `CHAT_IDS`.
+- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico`, `/diagnostico_playback`). Si se deja vacio, se usan los `CHAT_IDS`.
 - `LIBRARY_CHAT_IDS`: opcional, destinos solo para altas de biblioteca (si vacio usa `CHAT_IDS`).
 - `PLAYBACK_CHAT_IDS`: opcional, destinos solo para eventos de reproduccion (si vacio usa `CHAT_IDS`).
 - `EMBY_API_URL`: URL base de Emby, por ejemplo `http://192.168.1.112:8096/emby`.
@@ -416,8 +416,10 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 
 - Envia `/menu` al bot y pulsa `Buscar por privado`.
 - O envia directamente `/buscar nombre de la peli o serie`.
+- El menu de comandos de Telegram se configura al arrancar el bot. Los usuarios normales ven `/buscar` y `/menu`.
 - En el chat privado con el bot, `/start` o `/menu` recuerda usar el menu de comandos junto al campo de escritura.
 - Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia` y `/diagnostico`.
+- Si actualizas `ADMIN_CHAT_IDS` o cambias los comandos, reinicia el contenedor para que Telegram reciba el menu nuevo.
 - Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
 - El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
