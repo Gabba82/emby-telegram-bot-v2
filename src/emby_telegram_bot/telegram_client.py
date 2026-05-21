@@ -10,7 +10,17 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 
-PRIVATE_SEARCH_BUTTON_TEXT = "🔎 Buscar pelicula o serie"
+PRIVATE_SEARCH_BUTTON_TEXT = "\U0001f50e Buscar pelicula o serie"
+ADMIN_RESEND_MENU_BUTTON_TEXT = "Reenviar reciente"
+ADMIN_LATEST_BUTTON_TEXT = "Reenviar ultimo"
+ADMIN_RESEND_BY_ID_BUTTON_TEXT = "Reenviar por ID"
+ADMIN_DIAGNOSTICS_BUTTON_TEXT = "Diagnostico"
+ADMIN_PRIVATE_BUTTON_TEXTS = {
+    ADMIN_RESEND_MENU_BUTTON_TEXT,
+    ADMIN_LATEST_BUTTON_TEXT,
+    ADMIN_RESEND_BY_ID_BUTTON_TEXT,
+    ADMIN_DIAGNOSTICS_BUTTON_TEXT,
+}
 
 
 def safe_markdown_v2(text: str) -> str:
@@ -128,13 +138,22 @@ class TelegramClient:
         keyboard = InlineKeyboardMarkup(buttons)
         self.send_text(f"Destino para reenviar '{item_name}':", chat_ids=[chat_id], reply_markup=keyboard)
 
-    def send_private_search_keyboard(self, chat_id: str) -> None:
+    def send_private_search_keyboard(self, chat_id: str, is_admin: bool = False) -> None:
+        buttons = [[PRIVATE_SEARCH_BUTTON_TEXT]]
+        if is_admin:
+            buttons.extend(
+                [
+                    [ADMIN_RESEND_MENU_BUTTON_TEXT, ADMIN_LATEST_BUTTON_TEXT],
+                    [ADMIN_RESEND_BY_ID_BUTTON_TEXT, ADMIN_DIAGNOSTICS_BUTTON_TEXT],
+                ]
+            )
         keyboard = ReplyKeyboardMarkup(
-            [[PRIVATE_SEARCH_BUTTON_TEXT]],
+            buttons,
             resize_keyboard=True,
             is_persistent=True,
         )
-        self.send_text("Menu de busqueda activado.", chat_ids=[chat_id], reply_markup=keyboard)
+        text = "Menu admin activado." if is_admin else "Menu de busqueda activado."
+        self.send_text(text, chat_ids=[chat_id], reply_markup=keyboard)
 
     def request_search_query(self, chat_id: str) -> None:
         self.send_text(

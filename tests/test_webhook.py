@@ -1,4 +1,5 @@
 from emby_telegram_bot.config import Settings
+from emby_telegram_bot.telegram_client import ADMIN_LATEST_BUTTON_TEXT
 from emby_telegram_bot.webhook import create_app
 
 
@@ -83,6 +84,7 @@ class _FakeTelegramClient:
         self.resend_target_menus = []
         self.menus = []
         self.private_keyboards = []
+        self.private_keyboard_admin_flags = []
         self.search_requests = []
         self.callbacks = []
         _FakeTelegramClient.latest = self
@@ -105,8 +107,9 @@ class _FakeTelegramClient:
     def send_resend_target_menu(self, chat_id: str, item_id: str, item_name: str, targets) -> None:
         self.resend_target_menus.append((chat_id, item_id, item_name, targets))
 
-    def send_private_search_keyboard(self, chat_id: str) -> None:
+    def send_private_search_keyboard(self, chat_id: str, is_admin: bool = False) -> None:
         self.private_keyboards.append(chat_id)
+        self.private_keyboard_admin_flags.append(is_admin)
 
     def request_search_query(self, chat_id: str) -> None:
         self.search_requests.append(chat_id)
@@ -185,6 +188,7 @@ def test_telegramhook_private_start_shows_persistent_keyboard(monkeypatch) -> No
 
     assert response.status_code == 200
     assert _FakeTelegramClient.latest.private_keyboards == ["-1001"]
+    assert _FakeTelegramClient.latest.private_keyboard_admin_flags == [False]
 
 
 def test_telegramhook_private_keyboard_button_requests_search_for_started_user(monkeypatch) -> None:
@@ -206,6 +210,36 @@ def test_telegramhook_private_keyboard_button_requests_search_for_started_user(m
     assert _FakeTelegramClient.latest.private_keyboards == ["99"]
     assert _FakeTelegramClient.latest.search_requests == ["99"]
     assert _FakeEmbyClient.latest.searches == []
+
+
+def test_telegramhook_private_admin_start_shows_admin_keyboard(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/start"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.private_keyboards == ["42"]
+    assert _FakeTelegramClient.latest.private_keyboard_admin_flags == [True]
+
+
+def test_telegramhook_private_admin_latest_button_shows_target_menu(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": ADMIN_LATEST_BUTTON_TEXT}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.item_requests == ["latest-1"]
+    assert _FakeTelegramClient.latest.resend_target_menus[0][1] == "latest-1"
 
 
 def test_telegramhook_multiple_results_sends_selection_menu(monkeypatch) -> None:

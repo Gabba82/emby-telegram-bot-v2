@@ -19,7 +19,15 @@ from .formatting import (
     infer_activity_event_code,
     is_activity_payload,
 )
-from .telegram_client import PRIVATE_SEARCH_BUTTON_TEXT, TelegramClient
+from .telegram_client import (
+    ADMIN_DIAGNOSTICS_BUTTON_TEXT,
+    ADMIN_LATEST_BUTTON_TEXT,
+    ADMIN_PRIVATE_BUTTON_TEXTS,
+    ADMIN_RESEND_BY_ID_BUTTON_TEXT,
+    ADMIN_RESEND_MENU_BUTTON_TEXT,
+    PRIVATE_SEARCH_BUTTON_TEXT,
+    TelegramClient,
+)
 
 
 def _extract_payload(req: Request) -> dict[str, Any]:
@@ -316,12 +324,14 @@ def create_app(settings: Settings) -> Flask:
         command = command.split("@", 1)[0].lower()
         is_private_menu_command = is_private_chat and command in {"/start", "/menu"}
         is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
+        is_private_admin_button = is_private_chat and text in ADMIN_PRIVATE_BUTTON_TEXTS
 
         if not chat_id or (
             not _is_authorized_chat(chat_id)
             and not is_search_reply
             and not is_private_menu_command
             and not is_private_search_button
+            and not is_private_admin_button
         ):
             logging.warning("Telegram update ignored from unauthorized chat_id=%s", chat_id or "unknown")
             return
@@ -329,9 +339,26 @@ def create_app(settings: Settings) -> Flask:
         if is_private_search_button:
             telegram.request_search_query(chat_id)
             return
+        if is_private_admin_button:
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Admin keyboard button rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este boton solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            if text == ADMIN_RESEND_MENU_BUTTON_TEXT:
+                _open_resend_item_menu(chat_id)
+                return
+            if text == ADMIN_LATEST_BUTTON_TEXT:
+                _send_latest_added(chat_id)
+                return
+            if text == ADMIN_RESEND_BY_ID_BUTTON_TEXT:
+                telegram.send_text("Envia /reenvia ID_DE_EMBY para elegir destino.", chat_ids=[chat_id])
+                return
+            if text == ADMIN_DIAGNOSTICS_BUTTON_TEXT:
+                _send_diagnostics(chat_id, is_private_chat)
+                return
         if command in {"/start", "/menu"}:
             if is_private_chat:
-                telegram.send_private_search_keyboard(chat_id)
+                telegram.send_private_search_keyboard(chat_id, is_admin=_is_admin_private_chat(chat_id, is_private_chat))
                 return
             telegram.send_search_menu(chat_id)
             return
