@@ -187,6 +187,27 @@ def test_telegramhook_private_start_shows_persistent_keyboard(monkeypatch) -> No
     assert _FakeTelegramClient.latest.private_keyboards == ["-1001"]
 
 
+def test_telegramhook_private_keyboard_button_requests_search_for_started_user(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    start_response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 99, "type": "private"}, "text": "/start"}},
+    )
+    button_response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 99, "type": "private"}, "text": "🔎 Buscar pelicula o serie"}},
+    )
+
+    assert start_response.status_code == 200
+    assert button_response.status_code == 200
+    assert _FakeTelegramClient.latest.private_keyboards == ["99"]
+    assert _FakeTelegramClient.latest.search_requests == ["99"]
+    assert _FakeEmbyClient.latest.searches == []
+
+
 def test_telegramhook_multiple_results_sends_selection_menu(monkeypatch) -> None:
     class MultiResultEmbyClient(_FakeEmbyClient):
         def search_items(self, query: str, limit: int = 10):

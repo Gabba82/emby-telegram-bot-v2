@@ -19,7 +19,7 @@ from .formatting import (
     infer_activity_event_code,
     is_activity_payload,
 )
-from .telegram_client import TelegramClient
+from .telegram_client import PRIVATE_SEARCH_BUTTON_TEXT, TelegramClient
 
 
 def _extract_payload(req: Request) -> dict[str, Any]:
@@ -315,12 +315,18 @@ def create_app(settings: Settings) -> Flask:
         command, _, arg = text.partition(" ")
         command = command.split("@", 1)[0].lower()
         is_private_menu_command = is_private_chat and command in {"/start", "/menu"}
+        is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
 
-        if not chat_id or (not _is_authorized_chat(chat_id) and not is_search_reply and not is_private_menu_command):
+        if not chat_id or (
+            not _is_authorized_chat(chat_id)
+            and not is_search_reply
+            and not is_private_menu_command
+            and not is_private_search_button
+        ):
             logging.warning("Telegram update ignored from unauthorized chat_id=%s", chat_id or "unknown")
             return
 
-        if text == "🔎 Buscar pelicula o serie":
+        if is_private_search_button:
             telegram.request_search_query(chat_id)
             return
         if command in {"/start", "/menu"}:

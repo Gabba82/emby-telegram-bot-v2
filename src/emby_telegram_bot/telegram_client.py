@@ -10,6 +10,9 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 
+PRIVATE_SEARCH_BUTTON_TEXT = "🔎 Buscar pelicula o serie"
+
+
 def safe_markdown_v2(text: str) -> str:
     return escape_markdown(text, version=2)
 
@@ -127,7 +130,7 @@ class TelegramClient:
 
     def send_private_search_keyboard(self, chat_id: str) -> None:
         keyboard = ReplyKeyboardMarkup(
-            [["🔎 Buscar pelicula o serie"]],
+            [[PRIVATE_SEARCH_BUTTON_TEXT]],
             resize_keyboard=True,
             is_persistent=True,
         )
