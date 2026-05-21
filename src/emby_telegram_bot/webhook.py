@@ -53,6 +53,7 @@ def create_app(settings: Settings) -> Flask:
         timeout_seconds=settings.request_timeout_seconds,
     )
     telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
+    telegram.configure_bot_commands(settings.admin_chat_ids)
     playback_targets = settings.playback_chat_ids or settings.chat_ids
     library_targets = settings.library_chat_ids or settings.chat_ids
     admin_targets = settings.admin_chat_ids or settings.chat_ids
@@ -358,7 +359,7 @@ def create_app(settings: Settings) -> Flask:
                 return
         if command in {"/start", "/menu"}:
             if is_private_chat:
-                telegram.send_private_search_keyboard(chat_id, is_admin=_is_admin_private_chat(chat_id, is_private_chat))
+                telegram.send_private_menu_help(chat_id, is_admin=_is_admin_private_chat(chat_id, is_private_chat))
                 return
             telegram.send_search_menu(chat_id)
             return

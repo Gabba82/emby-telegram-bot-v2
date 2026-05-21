@@ -5,7 +5,7 @@ import io
 import logging
 from typing import Any
 
-from telegram import Bot, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Bot, BotCommand, BotCommandScopeChat, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
@@ -138,22 +138,9 @@ class TelegramClient:
         keyboard = InlineKeyboardMarkup(buttons)
         self.send_text(f"Destino para reenviar '{item_name}':", chat_ids=[chat_id], reply_markup=keyboard)
 
-    def send_private_search_keyboard(self, chat_id: str, is_admin: bool = False) -> None:
-        buttons = [[PRIVATE_SEARCH_BUTTON_TEXT]]
-        if is_admin:
-            buttons.extend(
-                [
-                    [ADMIN_RESEND_MENU_BUTTON_TEXT, ADMIN_LATEST_BUTTON_TEXT],
-                    [ADMIN_RESEND_BY_ID_BUTTON_TEXT, ADMIN_DIAGNOSTICS_BUTTON_TEXT],
-                ]
-            )
-        keyboard = ReplyKeyboardMarkup(
-            buttons,
-            resize_keyboard=True,
-            is_persistent=True,
-        )
+    def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         text = "Menu admin activado." if is_admin else "Menu de busqueda activado."
-        self.send_text(text, chat_ids=[chat_id], reply_markup=keyboard)
+        self.send_text(f"{text} Abre el menu de comandos junto al campo de escritura.", chat_ids=[chat_id])
 
     def request_search_query(self, chat_id: str) -> None:
         self.send_text(
@@ -161,6 +148,12 @@ class TelegramClient:
             chat_ids=[chat_id],
             reply_markup=ForceReply(selective=True),
         )
+
+    def configure_bot_commands(self, admin_chat_ids: list[str]) -> None:
+        try:
+            asyncio.run(self._configure_bot_commands(admin_chat_ids))
+        except Exception as exc:
+            logging.error("Telegram command menu configuration failed error_type=%s error=%s", type(exc).__name__, exc)
 
     def answer_callback_query(self, callback_query_id: str, text: str = "", show_alert: bool = False) -> None:
         try:
@@ -220,6 +213,24 @@ class TelegramClient:
         async with Bot(token=self._token) as bot:
             me = await bot.get_me()
             return f"@{me.username}" if me.username else str(me.id)
+
+    async def _configure_bot_commands(self, admin_chat_ids: list[str]) -> None:
+        user_commands = [
+            BotCommand("buscar", "Buscar pelicula o serie"),
+            BotCommand("menu", "Mostrar opciones del bot"),
+        ]
+        admin_commands = [
+            *user_commands,
+            BotCommand("reenviar", "Reenviar contenido reciente"),
+            BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
+            BotCommand("reenvia", "Reenviar por ID de Emby"),
+            BotCommand("diagnostico", "Validar configuracion"),
+        ]
+        async with Bot(token=self._token) as bot:
+            await bot.set_my_commands(user_commands)
+            for chat_id in admin_chat_ids:
+                if chat_id:
+                    await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=chat_id))
 
     async def _answer_callback_query(self, callback_query_id: str, text: str, show_alert: bool = False) -> None:
         async with Bot(token=self._token) as bot:

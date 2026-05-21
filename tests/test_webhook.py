@@ -83,8 +83,8 @@ class _FakeTelegramClient:
         self.resend_item_menus = []
         self.resend_target_menus = []
         self.menus = []
-        self.private_keyboards = []
-        self.private_keyboard_admin_flags = []
+        self.private_menu_helps = []
+        self.command_configs = []
         self.search_requests = []
         self.callbacks = []
         _FakeTelegramClient.latest = self
@@ -107,12 +107,14 @@ class _FakeTelegramClient:
     def send_resend_target_menu(self, chat_id: str, item_id: str, item_name: str, targets) -> None:
         self.resend_target_menus.append((chat_id, item_id, item_name, targets))
 
-    def send_private_search_keyboard(self, chat_id: str, is_admin: bool = False) -> None:
-        self.private_keyboards.append(chat_id)
-        self.private_keyboard_admin_flags.append(is_admin)
+    def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
+        self.private_menu_helps.append((chat_id, is_admin))
 
     def request_search_query(self, chat_id: str) -> None:
         self.search_requests.append(chat_id)
+
+    def configure_bot_commands(self, admin_chat_ids) -> None:
+        self.command_configs.append(list(admin_chat_ids))
 
     def answer_callback_query(self, callback_query_id: str, text: str = "", show_alert: bool = False) -> None:
         self.callbacks.append((callback_query_id, text, show_alert))
@@ -187,8 +189,8 @@ def test_telegramhook_private_start_shows_persistent_keyboard(monkeypatch) -> No
     )
 
     assert response.status_code == 200
-    assert _FakeTelegramClient.latest.private_keyboards == ["-1001"]
-    assert _FakeTelegramClient.latest.private_keyboard_admin_flags == [False]
+    assert _FakeTelegramClient.latest.private_menu_helps == [("-1001", False)]
+    assert _FakeTelegramClient.latest.command_configs == [["42"]]
 
 
 def test_telegramhook_private_keyboard_button_requests_search_for_started_user(monkeypatch) -> None:
@@ -207,7 +209,7 @@ def test_telegramhook_private_keyboard_button_requests_search_for_started_user(m
 
     assert start_response.status_code == 200
     assert button_response.status_code == 200
-    assert _FakeTelegramClient.latest.private_keyboards == ["99"]
+    assert _FakeTelegramClient.latest.private_menu_helps == [("99", False)]
     assert _FakeTelegramClient.latest.search_requests == ["99"]
     assert _FakeEmbyClient.latest.searches == []
 
@@ -223,8 +225,7 @@ def test_telegramhook_private_admin_start_shows_admin_keyboard(monkeypatch) -> N
     )
 
     assert response.status_code == 200
-    assert _FakeTelegramClient.latest.private_keyboards == ["42"]
-    assert _FakeTelegramClient.latest.private_keyboard_admin_flags == [True]
+    assert _FakeTelegramClient.latest.private_menu_helps == [("42", True)]
 
 
 def test_telegramhook_private_admin_latest_button_shows_target_menu(monkeypatch) -> None:

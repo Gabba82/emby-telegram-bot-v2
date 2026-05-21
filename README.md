@@ -230,8 +230,8 @@ En Telegram:
 1. Abre el bot en privado.
 2. Pulsa `Iniciar`.
 3. Escribe `/start` o `/menu`.
-4. Debe aparecer el boton fijo `Buscar pelicula o serie`.
-5. Busca una pelicula o serie.
+4. Debe quedar disponible el menu de comandos junto al campo de escritura.
+5. Usa `/buscar` desde ese menu para buscar una pelicula o serie.
 
 En el grupo:
 
@@ -416,7 +416,8 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 
 - Envia `/menu` al bot y pulsa `Buscar por privado`.
 - O envia directamente `/buscar nombre de la peli o serie`.
-- En el chat privado con el bot, `/start` o `/menu` activa un teclado persistente junto a la barra de escribir con el boton `Buscar pelicula o serie`.
+- En el chat privado con el bot, `/start` o `/menu` recuerda usar el menu de comandos junto al campo de escritura.
+- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia` y `/diagnostico`.
 - Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
 - El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
