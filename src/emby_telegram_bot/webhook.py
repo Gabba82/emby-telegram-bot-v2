@@ -324,6 +324,7 @@ def create_app(settings: Settings) -> Flask:
         command, _, arg = text.partition(" ")
         command = command.split("@", 1)[0].lower()
         is_private_menu_command = is_private_chat and command in {"/start", "/menu"}
+        is_private_search_command = is_private_chat and command == "/buscar"
         is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
         is_private_admin_button = is_private_chat and text in ADMIN_PRIVATE_BUTTON_TEXTS
 
@@ -331,6 +332,7 @@ def create_app(settings: Settings) -> Flask:
             not _is_authorized_chat(chat_id)
             and not is_search_reply
             and not is_private_menu_command
+            and not is_private_search_command
             and not is_private_search_button
             and not is_private_admin_button
         ):

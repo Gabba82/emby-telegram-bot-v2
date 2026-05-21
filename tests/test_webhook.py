@@ -214,6 +214,36 @@ def test_telegramhook_private_keyboard_button_requests_search_for_started_user(m
     assert _FakeEmbyClient.latest.searches == []
 
 
+def test_telegramhook_private_search_command_requests_query_for_normal_user(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 99, "type": "private"}, "text": "/buscar"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.search_requests == ["99"]
+    assert _FakeEmbyClient.latest.searches == []
+
+
+def test_telegramhook_private_search_command_with_query_searches_for_normal_user(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 99, "type": "private"}, "text": "/buscar wick"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.searches == [("wick", 10)]
+    assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
+
+
 def test_telegramhook_private_admin_start_shows_admin_keyboard(monkeypatch) -> None:
     monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
     monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
