@@ -2,8 +2,10 @@
 
 import json
 import logging
+import os
 import threading
 import time
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from flask import Flask, Request, Response, request
@@ -266,6 +268,48 @@ def create_app(settings: Settings) -> Flask:
             lines.append(f"- Telegram API: error ({type(exc).__name__})")
         telegram.send_text("\n".join(lines), chat_ids=[chat_id])
 
+    def _send_help(chat_id: str, is_private_chat: bool) -> None:
+        lines = [
+            "Ayuda del bot:",
+            "- /buscar titulo: busca una pelicula o serie.",
+            "- /menu: muestra como abrir el menu de comandos.",
+        ]
+        if _is_admin_private_chat(chat_id, is_private_chat):
+            lines.extend(
+                [
+                    "",
+                    "Admin:",
+                    "- /reenviar: elegir entre contenido reciente y reenviarlo.",
+                    "- /reenviaultimo: reenviar el ultimo contenido anadido.",
+                    "- /reenvia ID_DE_EMBY: reenviar una ficha concreta.",
+                    "- /diagnostico: validar Emby, Telegram y destinos.",
+                    "- /version: ver version desplegada.",
+                    "- /reload_menu: recargar comandos del menu de Telegram.",
+                ]
+            )
+        telegram.send_text("\n".join(lines), chat_ids=[chat_id])
+
+    def _send_version(chat_id: str) -> None:
+        try:
+            package_version = version("emby-telegram-bot-v2")
+        except PackageNotFoundError:
+            package_version = "desconocida"
+        build_version = os.getenv("APP_VERSION", "").strip() or "no configurado"
+        telegram.send_text(
+            "\n".join(
+                [
+                    "Version del bot:",
+                    f"- Paquete: {package_version}",
+                    f"- Build: {build_version}",
+                ]
+            ),
+            chat_ids=[chat_id],
+        )
+
+    def _reload_bot_commands(chat_id: str) -> None:
+        telegram.configure_bot_commands(settings.admin_chat_ids)
+        telegram.send_text("Menu de comandos recargado.", chat_ids=[chat_id])
+
     def _send_search_results(chat_id: str, query: str, with_images: bool = False) -> None:
         clean_query = query.strip()
         if len(clean_query) < 2:
@@ -306,6 +350,8 @@ def create_app(settings: Settings) -> Flask:
                 logging.warning("Cannot fetch series availability id=%s error=%s", item.get("Id"), exc)
         image = emby.get_item_image(item)
         telegram.send(build_search_item_caption(item, series_seasons=series_seasons), image, chat_ids=[chat_id])
+        if item.get("Id") and _is_admin_private_chat(chat_id, True):
+            telegram.send_search_admin_actions(chat_id, str(item["Id"]))
 
     def _handle_telegram_message(message: dict[str, Any]) -> None:
         chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
@@ -323,7 +369,7 @@ def create_app(settings: Settings) -> Flask:
 
         command, _, arg = text.partition(" ")
         command = command.split("@", 1)[0].lower()
-        is_private_menu_command = is_private_chat and command in {"/start", "/menu"}
+        is_private_menu_command = is_private_chat and command in {"/start", "/menu", "/help", "/version"}
         is_private_search_command = is_private_chat and command == "/buscar"
         is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
         is_private_admin_button = is_private_chat and text in ADMIN_PRIVATE_BUTTON_TEXTS
@@ -364,6 +410,23 @@ def create_app(settings: Settings) -> Flask:
                 telegram.send_private_menu_help(chat_id, is_admin=_is_admin_private_chat(chat_id, is_private_chat))
                 return
             telegram.send_search_menu(chat_id)
+            return
+        if command == "/help":
+            _send_help(chat_id, is_private_chat)
+            return
+        if command == "/version":
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Version command rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            _send_version(chat_id)
+            return
+        if command == "/reload_menu":
+            if not _is_admin_private_chat(chat_id, is_private_chat):
+                logging.warning("Reload menu command rejected for non-admin/private chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+                return
+            _reload_bot_commands(chat_id)
             return
         if command == "/buscar":
             target_chat_id = chat_id if is_private_chat else private_chat_id

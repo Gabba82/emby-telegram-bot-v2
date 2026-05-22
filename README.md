@@ -408,6 +408,7 @@ Ejemplo completo en `.env.example`.
 - `PLAYBACK_WITH_IMAGE`: `true/false`, adjunta caratula en notificaciones de reproduccion.
 - `PLAYBACK_STYLE`: `compact` o `detailed` para mensajes de reproduccion.
 - `APP_TIMEZONE`: zona horaria IANA para la hora mostrada en reproduccion (ej. `Europe/Madrid`).
+- `APP_VERSION`: opcional, etiqueta de build que muestra `/version` (en Docker usa `local` si no se indica otra).
 - `TELEGRAM_WEBHOOK_SECRET`: opcional, secreto para validar el webhook de Telegram.
 
 ## Consultas desde Telegram
@@ -416,9 +417,9 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 
 - Envia `/menu` al bot y pulsa `Buscar por privado`.
 - O envia directamente `/buscar nombre de la peli o serie`.
-- El menu de comandos de Telegram se configura al arrancar el bot. Los usuarios normales ven `/buscar` y `/menu`.
+- El menu de comandos de Telegram se configura al arrancar el bot. Los usuarios normales ven `/buscar`, `/help` y `/menu`.
 - En el chat privado con el bot, `/start` o `/menu` recuerda usar el menu de comandos junto al campo de escritura.
-- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia` y `/diagnostico`.
+- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/version` y `/reload_menu`.
 - Si actualizas `ADMIN_CHAT_IDS` o cambias los comandos, reinicia el contenedor para que Telegram reciba el menu nuevo.
 - Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
 - El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
@@ -434,10 +435,15 @@ Configura primero tu ID privado en `ADMIN_CHAT_IDS` y abre una conversacion priv
 - `/reenviaultimo` o `/lastadded`: consulta en Emby el ultimo elemento anadido (`Movie`, `Series` o `Episode`) y muestra el selector de destino.
 - `/reenvia 12345`: carga el item con ID de Emby `12345` y muestra el selector de destino.
 - `/diagnostico_playback`: valida credenciales y muestra destinos activos para reproduccion y biblioteca.
+- `/help`: muestra los comandos disponibles segun seas usuario normal o admin.
+- `/version`: muestra la version del paquete y el build configurado con `APP_VERSION`.
+- `/reload_menu`: vuelve a registrar el menu de comandos de Telegram sin reiniciar el contenedor.
 
 El menu de recientes muestra peliculas y series. Si Emby devuelve episodios recientes, el bot intenta agruparlos por serie para evitar reenviar capitulos uno a uno. El selector de destino usa los chats definidos en `.env`: `CHAT_IDS`, `LIBRARY_CHAT_IDS`, `PLAYBACK_CHAT_IDS`, `ADMIN_CHAT_IDS` y tu chat privado actual. Al confirmar, el bot vuelve a consultar Emby y regenera la notificacion con metadata actual.
 
 Esto esta pensado para el caso en que Emby identifico mal una pelicula/serie al entrar en biblioteca. Reidentifica manualmente en Emby, espera a que Emby guarde la metadata y ejecuta `/reenviar`, `/reenviaultimo` o `/reenvia ID` por privado.
+
+Si haces una busqueda desde tu chat privado admin, la ficha del resultado incluye una accion `Reenviar esta ficha` para elegir destino sin copiar el ID a mano.
 
 Para recibir esos mensajes, configura el webhook de Telegram apuntando a:
 

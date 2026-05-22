@@ -138,6 +138,12 @@ class TelegramClient:
         keyboard = InlineKeyboardMarkup(buttons)
         self.send_text(f"Destino para reenviar '{item_name}':", chat_ids=[chat_id], reply_markup=keyboard)
 
+    def send_search_admin_actions(self, chat_id: str, item_id: str) -> None:
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Reenviar esta ficha", callback_data=f"resend:item:{item_id}")]]
+        )
+        self.send_text("Acciones admin para esta ficha:", chat_ids=[chat_id], reply_markup=keyboard)
+
     def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         text = "Menu admin activado." if is_admin else "Menu de busqueda activado."
         self.send_text(f"{text} Abre el menu de comandos junto al campo de escritura.", chat_ids=[chat_id])
@@ -217,6 +223,7 @@ class TelegramClient:
     async def _configure_bot_commands(self, admin_chat_ids: list[str]) -> None:
         user_commands = [
             BotCommand("buscar", "Buscar pelicula o serie"),
+            BotCommand("help", "Ver ayuda"),
             BotCommand("menu", "Mostrar opciones del bot"),
         ]
         admin_commands = [
@@ -225,6 +232,8 @@ class TelegramClient:
             BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
             BotCommand("reenvia", "Reenviar por ID de Emby"),
             BotCommand("diagnostico", "Validar configuracion"),
+            BotCommand("version", "Ver version desplegada"),
+            BotCommand("reload_menu", "Recargar menu de comandos"),
         ]
         async with Bot(token=self._token) as bot:
             await bot.set_my_commands(user_commands)

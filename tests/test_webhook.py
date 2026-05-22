@@ -82,6 +82,7 @@ class _FakeTelegramClient:
         self.selection_menus = []
         self.resend_item_menus = []
         self.resend_target_menus = []
+        self.search_admin_actions = []
         self.menus = []
         self.private_menu_helps = []
         self.command_configs = []
@@ -106,6 +107,9 @@ class _FakeTelegramClient:
 
     def send_resend_target_menu(self, chat_id: str, item_id: str, item_name: str, targets) -> None:
         self.resend_target_menus.append((chat_id, item_id, item_name, targets))
+
+    def send_search_admin_actions(self, chat_id: str, item_id: str) -> None:
+        self.search_admin_actions.append((chat_id, item_id))
 
     def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         self.private_menu_helps.append((chat_id, is_admin))
@@ -242,6 +246,22 @@ def test_telegramhook_private_search_command_with_query_searches_for_normal_user
     assert response.status_code == 200
     assert _FakeEmbyClient.latest.searches == [("wick", 10)]
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
+    assert _FakeTelegramClient.latest.search_admin_actions == []
+
+
+def test_telegramhook_help_shows_user_commands_for_normal_user(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 99, "type": "private"}, "text": "/help"}},
+    )
+
+    assert response.status_code == 200
+    assert "/buscar titulo" in _FakeTelegramClient.latest.sent_texts[0][0]
+    assert "Admin:" not in _FakeTelegramClient.latest.sent_texts[0][0]
 
 
 def test_telegramhook_private_admin_start_shows_admin_keyboard(monkeypatch) -> None:
@@ -256,6 +276,49 @@ def test_telegramhook_private_admin_start_shows_admin_keyboard(monkeypatch) -> N
 
     assert response.status_code == 200
     assert _FakeTelegramClient.latest.private_menu_helps == [("42", True)]
+
+
+def test_telegramhook_private_admin_help_shows_admin_commands(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/help"}},
+    )
+
+    assert response.status_code == 200
+    assert "/reload_menu" in _FakeTelegramClient.latest.sent_texts[0][0]
+
+
+def test_telegramhook_private_admin_reload_menu_reconfigures_commands(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/reload_menu"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.command_configs == [["42"], ["42"]]
+    assert _FakeTelegramClient.latest.sent_texts[-1][0] == "Menu de comandos recargado."
+
+
+def test_telegramhook_private_admin_version_reports_package(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/version"}},
+    )
+
+    assert response.status_code == 200
+    assert "Version del bot:" in _FakeTelegramClient.latest.sent_texts[0][0]
 
 
 def test_telegramhook_private_admin_latest_button_shows_target_menu(monkeypatch) -> None:
@@ -317,6 +380,7 @@ def test_telegramhook_selected_result_sends_item_card(monkeypatch) -> None:
     assert _FakeEmbyClient.latest.item_requests
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert "Un asesino retirado" in _FakeTelegramClient.latest.sent_media[0][0]
+    assert _FakeTelegramClient.latest.search_admin_actions == [("42", "item-1")]
 
 
 def test_telegramhook_reenviaultimo_shows_target_menu_to_private_admin(monkeypatch) -> None:
