@@ -31,6 +31,18 @@ def test_search_items_ignores_empty_query() -> None:
     assert client.search_items(" ") == []
 
 
+def test_search_items_accepts_type_filter(monkeypatch) -> None:
+    client = EmbyClient(base_url="http://emby:8096/emby", api_key="key", timeout_seconds=15)
+
+    def fake_get(path, params=None, stream=False):
+        assert params["IncludeItemTypes"] == "Series"
+        return _FakeResponse({"Items": [{"Type": "Series", "Name": "Dark"}]})
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    assert client.search_items("dark", include_item_types="Series") == [{"Type": "Series", "Name": "Dark"}]
+
+
 def test_get_item_by_id_uses_items_fallback(monkeypatch) -> None:
     client = EmbyClient(base_url="http://emby:8096/emby", api_key="key", timeout_seconds=15)
 

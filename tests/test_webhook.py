@@ -3,7 +3,7 @@ from emby_telegram_bot.telegram_client import ADMIN_LATEST_BUTTON_TEXT
 from emby_telegram_bot.webhook import create_app
 
 
-def _settings(secret: str = "") -> Settings:
+def _settings(secret: str = "", chat_labels: dict[str, str] | None = None) -> Settings:
     return Settings(
         telegram_token="token",
         chat_ids=["-1001"],
@@ -23,6 +23,7 @@ def _settings(secret: str = "") -> Settings:
         playback_style="compact",
         app_timezone="Europe/Madrid",
         telegram_webhook_secret=secret,
+        chat_labels=chat_labels or {},
     )
 
 
@@ -34,8 +35,8 @@ class _FakeEmbyClient:
         self.item_requests = []
         _FakeEmbyClient.latest = self
 
-    def search_items(self, query: str, limit: int = 10):
-        self.searches.append((query, limit))
+    def search_items(self, query: str, limit: int = 10, include_item_types: str = "Movie,Series"):
+        self.searches.append((query, limit, include_item_types))
         return [{"Id": "item-1", "Type": "Movie", "Name": "John Wick", "ProductionYear": 2014}]
 
     def get_item_info(self, item_id: str):
@@ -83,6 +84,8 @@ class _FakeTelegramClient:
         self.resend_item_menus = []
         self.resend_target_menus = []
         self.search_admin_actions = []
+        self.search_filter_menus = []
+        self.search_again_actions = []
         self.menus = []
         self.private_menu_helps = []
         self.command_configs = []
@@ -102,6 +105,9 @@ class _FakeTelegramClient:
     def send_search_selection_menu(self, chat_id: str, query: str, items) -> None:
         self.selection_menus.append((chat_id, query, items))
 
+    def send_search_filter_menu(self, chat_id: str) -> None:
+        self.search_filter_menus.append(chat_id)
+
     def send_resend_item_menu(self, chat_id: str, items) -> None:
         self.resend_item_menus.append((chat_id, items))
 
@@ -111,11 +117,14 @@ class _FakeTelegramClient:
     def send_search_admin_actions(self, chat_id: str, item_id: str) -> None:
         self.search_admin_actions.append((chat_id, item_id))
 
+    def send_search_again_action(self, chat_id: str) -> None:
+        self.search_again_actions.append(chat_id)
+
     def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         self.private_menu_helps.append((chat_id, is_admin))
 
-    def request_search_query(self, chat_id: str) -> None:
-        self.search_requests.append(chat_id)
+    def request_search_query(self, chat_id: str, mode: str = "all") -> None:
+        self.search_requests.append((chat_id, mode))
 
     def configure_bot_commands(self, admin_chat_ids) -> None:
         self.command_configs.append(list(admin_chat_ids))
@@ -138,7 +147,7 @@ def test_telegramhook_search_command(monkeypatch) -> None:
     )
 
     assert response.status_code == 200
-    assert _FakeEmbyClient.latest.searches == [("wick", 10)]
+    assert _FakeEmbyClient.latest.searches == [("wick", 10, "Movie,Series")]
     assert _FakeEmbyClient.latest.item_requests == ["item-1"]
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert _FakeTelegramClient.latest.sent_media[0][1] == b"image"
@@ -176,7 +185,7 @@ def test_telegramhook_group_button_requests_private_search(monkeypatch) -> None:
     )
 
     assert response.status_code == 200
-    assert _FakeTelegramClient.latest.search_requests == ["42"]
+    assert _FakeTelegramClient.latest.search_filter_menus == ["42"]
     assert _FakeTelegramClient.latest.callbacks == [
         ("callback-1", "Te he escrito por privado. Si no llega, abre el bot y pulsa Iniciar.", True)
     ]
@@ -214,7 +223,7 @@ def test_telegramhook_private_keyboard_button_requests_search_for_started_user(m
     assert start_response.status_code == 200
     assert button_response.status_code == 200
     assert _FakeTelegramClient.latest.private_menu_helps == [("99", False)]
-    assert _FakeTelegramClient.latest.search_requests == ["99"]
+    assert _FakeTelegramClient.latest.search_filter_menus == ["99"]
     assert _FakeEmbyClient.latest.searches == []
 
 
@@ -229,8 +238,70 @@ def test_telegramhook_private_search_command_requests_query_for_normal_user(monk
     )
 
     assert response.status_code == 200
-    assert _FakeTelegramClient.latest.search_requests == ["99"]
+    assert _FakeTelegramClient.latest.search_filter_menus == ["99"]
     assert _FakeEmbyClient.latest.searches == []
+
+
+def test_telegramhook_private_search_filter_requests_query(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "callback-filter",
+                "from": {"id": 99},
+                "data": "search:mode:series",
+                "message": {"chat": {"id": 99, "type": "private"}},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.search_requests == [("99", "series")]
+
+
+def test_telegramhook_private_search_reply_uses_selected_filter(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={
+            "message": {
+                "chat": {"id": 99, "type": "private"},
+                "text": "dark",
+                "reply_to_message": {"text": "Escribe el titulo de series que quieres buscar."},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.searches == [("dark", 10, "Series")]
+
+
+def test_telegramhook_private_search_again_shows_filter_menu(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "callback-again",
+                "from": {"id": 99},
+                "data": "search:again",
+                "message": {"chat": {"id": 99, "type": "private"}},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert _FakeTelegramClient.latest.search_filter_menus == ["99"]
 
 
 def test_telegramhook_private_search_command_with_query_searches_for_normal_user(monkeypatch) -> None:
@@ -244,9 +315,10 @@ def test_telegramhook_private_search_command_with_query_searches_for_normal_user
     )
 
     assert response.status_code == 200
-    assert _FakeEmbyClient.latest.searches == [("wick", 10)]
+    assert _FakeEmbyClient.latest.searches == [("wick", 10, "Movie,Series")]
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert _FakeTelegramClient.latest.search_admin_actions == []
+    assert _FakeTelegramClient.latest.search_again_actions == ["99"]
 
 
 def test_telegramhook_help_shows_user_commands_for_normal_user(monkeypatch) -> None:
@@ -338,8 +410,8 @@ def test_telegramhook_private_admin_latest_button_shows_target_menu(monkeypatch)
 
 def test_telegramhook_multiple_results_sends_selection_menu(monkeypatch) -> None:
     class MultiResultEmbyClient(_FakeEmbyClient):
-        def search_items(self, query: str, limit: int = 10):
-            self.searches.append((query, limit))
+        def search_items(self, query: str, limit: int = 10, include_item_types: str = "Movie,Series"):
+            self.searches.append((query, limit, include_item_types))
             return [
                 {"Id": "item-1", "Type": "Movie", "Name": "John Wick", "ProductionYear": 2014},
                 {"Id": "item-2", "Type": "Movie", "Name": "John Wick 2", "ProductionYear": 2017},
@@ -381,6 +453,7 @@ def test_telegramhook_selected_result_sends_item_card(monkeypatch) -> None:
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert "Un asesino retirado" in _FakeTelegramClient.latest.sent_media[0][0]
     assert _FakeTelegramClient.latest.search_admin_actions == [("42", "item-1")]
+    assert _FakeTelegramClient.latest.search_again_actions == ["42"]
 
 
 def test_telegramhook_reenviaultimo_shows_target_menu_to_private_admin(monkeypatch) -> None:
@@ -413,6 +486,22 @@ def test_telegramhook_reenvia_shows_target_menu_to_private_admin(monkeypatch) ->
     assert _FakeEmbyClient.latest.item_requests == ["12345"]
     assert _FakeTelegramClient.latest.resend_target_menus[0][1] == "12345"
     assert _FakeTelegramClient.latest.sent_media == []
+
+
+def test_telegramhook_resend_target_menu_uses_chat_labels(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings(chat_labels={"chat": "Canal novedades", "private": "Mi privado"}))
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/reenvia 12345"}},
+    )
+
+    assert response.status_code == 200
+    labels = [target[1] for target in _FakeTelegramClient.latest.resend_target_menus[0][3]]
+    assert "Mi privado" in labels
+    assert "Canal novedades" in labels
 
 
 def test_telegramhook_reenviar_shows_recent_item_menu(monkeypatch) -> None:

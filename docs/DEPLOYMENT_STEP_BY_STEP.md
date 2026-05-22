@@ -83,6 +83,8 @@ Rellena todos los campos:
 ```env
 TELEGRAM_TOKEN=tu_token_de_botfather
 CHAT_IDS=-1001234567890
+ADMIN_CHAT_IDS=123456789
+CHAT_LABELS=chat:Canal novedades,private:Mi privado
 EMBY_API_URL=http://192.168.1.112:8096/emby
 EMBY_API_KEY=tu_api_key_de_emby
 REQUEST_TIMEOUT_SECONDS=15

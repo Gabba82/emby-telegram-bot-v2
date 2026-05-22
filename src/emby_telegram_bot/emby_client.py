@@ -62,16 +62,22 @@ class EmbyClient:
             return items[0]
         return {}
 
-    def search_items(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+    def search_items(
+        self,
+        query: str,
+        limit: int = 10,
+        include_item_types: str = "Movie,Series",
+    ) -> list[dict[str, Any]]:
         query = query.strip()
         if not query:
             return []
 
+        item_types = include_item_types.strip() or "Movie,Series"
         payload = self._get(
             "Items",
             params={
                 "SearchTerm": query,
-                "IncludeItemTypes": "Movie,Series",
+                "IncludeItemTypes": item_types,
                 "Recursive": "true",
                 "Limit": limit,
                 "Fields": "ProductionYear,Overview",

@@ -66,6 +66,11 @@ def create_app(settings: Settings) -> Flask:
     recent_library: dict[str, float] = {}
     playback_lock = threading.Lock()
     library_lock = threading.Lock()
+    search_mode_item_types = {
+        "all": "Movie,Series",
+        "movies": "Movie",
+        "series": "Series",
+    }
 
     def _should_send_playback_event(payload: dict[str, Any], activity_item: dict[str, Any]) -> bool:
         event_code = infer_activity_event_code(payload)
@@ -147,6 +152,21 @@ def create_app(settings: Settings) -> Flask:
     def _is_admin_private_chat(chat_id: str, is_private_chat: bool) -> bool:
         return is_private_chat and chat_id in set(admin_targets)
 
+    def _search_mode_from_prompt(prompt: str) -> str:
+        if "peliculas" in prompt:
+            return "movies"
+        if "series" in prompt and "peliculas" not in prompt:
+            return "series"
+        return "all"
+
+    def _format_target_label(target_key: str, default_label: str, chat_ids: list[str]) -> str:
+        if target_key in settings.chat_labels:
+            return settings.chat_labels[target_key]
+        labeled_chat_ids = [settings.chat_labels.get(chat_id, chat_id) for chat_id in chat_ids]
+        if labeled_chat_ids and labeled_chat_ids != chat_ids:
+            return ", ".join(labeled_chat_ids)
+        return default_label
+
     def _resend_target_options(current_chat_id: str) -> list[tuple[str, str, list[str]]]:
         options: list[tuple[str, str, list[str]]] = [
             ("private", f"Mi privado ({current_chat_id})", [current_chat_id]),
@@ -167,7 +187,7 @@ def create_app(settings: Settings) -> Flask:
             if not clean_chat_ids or targets_key in seen_targets:
                 continue
             seen_targets.add(targets_key)
-            unique_options.append((key, label, clean_chat_ids))
+            unique_options.append((key, _format_target_label(key, label, clean_chat_ids), clean_chat_ids))
         return unique_options
 
     def _resolve_resend_targets(target_key: str, current_chat_id: str) -> list[str]:
@@ -283,6 +303,7 @@ def create_app(settings: Settings) -> Flask:
                     "- /reenviaultimo: reenviar el ultimo contenido anadido.",
                     "- /reenvia ID_DE_EMBY: reenviar una ficha concreta.",
                     "- /diagnostico: validar Emby, Telegram y destinos.",
+                    "- /estado: ver estado del bot.",
                     "- /version: ver version desplegada.",
                     "- /reload_menu: recargar comandos del menu de Telegram.",
                 ]
@@ -310,13 +331,18 @@ def create_app(settings: Settings) -> Flask:
         telegram.configure_bot_commands(settings.admin_chat_ids)
         telegram.send_text("Menu de comandos recargado.", chat_ids=[chat_id])
 
-    def _send_search_results(chat_id: str, query: str, with_images: bool = False) -> None:
+    def _send_search_results(
+        chat_id: str,
+        query: str,
+        with_images: bool = False,
+        mode: str = "all",
+    ) -> None:
         clean_query = query.strip()
         if len(clean_query) < 2:
             telegram.send_text("Escribe al menos 2 caracteres para buscar.", chat_ids=[chat_id])
             return
         try:
-            items = emby.search_items(clean_query)
+            items = emby.search_items(clean_query, include_item_types=search_mode_item_types.get(mode, "Movie,Series"))
         except Exception as exc:
             logging.error("Emby search failed query=%s error=%s", clean_query, exc)
             telegram.send_text("No he podido consultar Emby ahora mismo. Revisa logs y conexion.", chat_ids=[chat_id])
@@ -352,6 +378,7 @@ def create_app(settings: Settings) -> Flask:
         telegram.send(build_search_item_caption(item, series_seasons=series_seasons), image, chat_ids=[chat_id])
         if item.get("Id") and _is_admin_private_chat(chat_id, True):
             telegram.send_search_admin_actions(chat_id, str(item["Id"]))
+        telegram.send_search_again_action(chat_id)
 
     def _handle_telegram_message(message: dict[str, Any]) -> None:
         chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
@@ -361,7 +388,7 @@ def create_app(settings: Settings) -> Flask:
         is_private_chat = chat.get("type") == "private"
         reply_to_message = message.get("reply_to_message") if isinstance(message.get("reply_to_message"), dict) else {}
         reply_text = str(reply_to_message.get("text") or "")
-        is_search_reply = is_private_chat and reply_text.startswith("Escribe el titulo de la pelicula o serie")
+        is_search_reply = is_private_chat and reply_text.startswith("Escribe el titulo de")
 
         text = str(message.get("text") or "").strip()
         if not text:
@@ -386,7 +413,7 @@ def create_app(settings: Settings) -> Flask:
             return
 
         if is_private_search_button:
-            telegram.request_search_query(chat_id)
+            telegram.send_search_filter_menu(chat_id)
             return
         if is_private_admin_button:
             if not _is_admin_private_chat(chat_id, is_private_chat):
@@ -433,7 +460,7 @@ def create_app(settings: Settings) -> Flask:
             if not target_chat_id:
                 return
             if not arg.strip():
-                telegram.request_search_query(target_chat_id)
+                telegram.send_search_filter_menu(target_chat_id)
                 return
             _send_search_results(target_chat_id, arg, with_images=True)
             return
@@ -458,7 +485,7 @@ def create_app(settings: Settings) -> Flask:
                 return
             _send_item_by_id(chat_id, arg)
             return
-        if command in {"/diagnostico", "/diagnostico_playback"}:
+        if command in {"/diagnostico", "/diagnostico_playback", "/estado"}:
             if not _is_authorized_chat(chat_id):
                 logging.warning("Diagnostics rejected for unauthorized chat_id=%s", chat_id)
                 return
@@ -466,7 +493,12 @@ def create_app(settings: Settings) -> Flask:
             return
 
         if is_search_reply:
-            _send_search_results(chat_id, text, with_images=chat.get("type") == "private")
+            _send_search_results(
+                chat_id,
+                text,
+                with_images=chat.get("type") == "private",
+                mode=_search_mode_from_prompt(reply_text),
+            )
             return
 
         if is_private_chat:
@@ -482,8 +514,11 @@ def create_app(settings: Settings) -> Flask:
         callback_data = str(callback_query.get("data") or "")
 
         is_search_selection = chat.get("type") == "private" and callback_data.startswith("search:item:")
+        is_search_flow = chat.get("type") == "private" and (
+            callback_data.startswith("search:mode:") or callback_data == "search:again"
+        )
         is_resend_selection = chat.get("type") == "private" and callback_data.startswith("resend:")
-        is_private_selection = is_search_selection or is_resend_selection
+        is_private_selection = is_search_selection or is_search_flow or is_resend_selection
         if not chat_id or (not _is_authorized_chat(chat_id) and not is_private_selection):
             if callback_id:
                 telegram.answer_callback_query(callback_id)
@@ -511,6 +546,21 @@ def create_app(settings: Settings) -> Flask:
                 telegram.send_text("No he podido cargar ese resultado ahora mismo.", chat_ids=[chat_id])
                 return
             _send_search_item(chat_id, item, fetch_details=False)
+            return
+
+        if callback_data.startswith("search:mode:"):
+            mode = callback_data.removeprefix("search:mode:")
+            if mode not in search_mode_item_types:
+                mode = "all"
+            if callback_id:
+                telegram.answer_callback_query(callback_id)
+            telegram.request_search_query(chat_id, mode=mode)
+            return
+
+        if callback_data == "search:again":
+            if callback_id:
+                telegram.answer_callback_query(callback_id)
+            telegram.send_search_filter_menu(chat_id)
             return
 
         if callback_data.startswith("resend:item:"):
@@ -556,10 +606,10 @@ def create_app(settings: Settings) -> Flask:
             if chat.get("type") == "private":
                 if callback_id:
                     telegram.answer_callback_query(callback_id)
-                telegram.request_search_query(chat_id)
+                telegram.send_search_filter_menu(chat_id)
                 return
             if private_chat_id:
-                telegram.request_search_query(private_chat_id)
+                telegram.send_search_filter_menu(private_chat_id)
                 if callback_id:
                     telegram.answer_callback_query(
                         callback_id,

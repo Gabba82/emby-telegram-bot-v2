@@ -92,6 +92,7 @@ CHAT_IDS=-1001234567890
 ADMIN_CHAT_IDS=123456789
 LIBRARY_CHAT_IDS=-1001234567890
 PLAYBACK_CHAT_IDS=-1001234567890
+CHAT_LABELS=chat:Canal novedades,playback:Grupo reproduccion,private:Mi privado
 EMBY_API_URL=https://emby.tudominio.duckdns.org/emby
 EMBY_API_KEY=api_key_real_de_emby
 REQUEST_TIMEOUT_SECONDS=15
@@ -393,9 +394,10 @@ Ejemplo completo en `.env.example`.
 
 - `TELEGRAM_TOKEN`: token de BotFather.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
-- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico`, `/diagnostico_playback`). Si se deja vacio, se usan los `CHAT_IDS`.
+- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico`, `/diagnostico_playback`, `/estado`, `/version`, `/reload_menu`). Si se deja vacio, se usan los `CHAT_IDS`.
 - `LIBRARY_CHAT_IDS`: opcional, destinos solo para altas de biblioteca (si vacio usa `CHAT_IDS`).
 - `PLAYBACK_CHAT_IDS`: opcional, destinos solo para eventos de reproduccion (si vacio usa `CHAT_IDS`).
+- `CHAT_LABELS`: opcional, nombres amigables para destinos. Acepta claves de destino (`private`, `chat`, `library`, `playback`, `admin`) o IDs concretos, por ejemplo `chat:Canal novedades,-100123:Grupo familia`.
 - `EMBY_API_URL`: URL base de Emby, por ejemplo `http://192.168.1.112:8096/emby`.
 - `EMBY_API_KEY`: API key de Emby.
 - `REQUEST_TIMEOUT_SECONDS`: timeout de llamadas HTTP a Emby.
@@ -419,10 +421,12 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - O envia directamente `/buscar nombre de la peli o serie`.
 - El menu de comandos de Telegram se configura al arrancar el bot. Los usuarios normales ven `/buscar`, `/help` y `/menu`.
 - En el chat privado con el bot, `/start` o `/menu` recuerda usar el menu de comandos junto al campo de escritura.
-- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/version` y `/reload_menu`.
+- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/estado`, `/version` y `/reload_menu`.
 - Si actualizas `ADMIN_CHAT_IDS` o cambias los comandos, reinicia el contenedor para que Telegram reciba el menu nuevo.
 - Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
 - El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
+- Al iniciar una busqueda sin texto, el bot deja filtrar por `Todo`, `Peliculas` o `Series`.
+- Despues de una ficha aparece `Buscar otra vez` para lanzar otra consulta sin volver al menu.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
 - En series, la ficha intenta mostrar temporadas y episodios disponibles.
 - En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano y audios; si hay varias versiones, lista cada una.
@@ -435,6 +439,7 @@ Configura primero tu ID privado en `ADMIN_CHAT_IDS` y abre una conversacion priv
 - `/reenviaultimo` o `/lastadded`: consulta en Emby el ultimo elemento anadido (`Movie`, `Series` o `Episode`) y muestra el selector de destino.
 - `/reenvia 12345`: carga el item con ID de Emby `12345` y muestra el selector de destino.
 - `/diagnostico_playback`: valida credenciales y muestra destinos activos para reproduccion y biblioteca.
+- `/estado`: alias corto de diagnostico para ver configuracion y salud.
 - `/help`: muestra los comandos disponibles segun seas usuario normal o admin.
 - `/version`: muestra la version del paquete y el build configurado con `APP_VERSION`.
 - `/reload_menu`: vuelve a registrar el menu de comandos de Telegram sin reiniciar el contenedor.

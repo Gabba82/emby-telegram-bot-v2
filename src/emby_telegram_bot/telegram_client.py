@@ -72,6 +72,18 @@ class TelegramClient:
         )
         self.send_text("Que quieres hacer?", chat_ids=[chat_id], reply_markup=keyboard)
 
+    def send_search_filter_menu(self, chat_id: str) -> None:
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Todo", callback_data="search:mode:all"),
+                    InlineKeyboardButton("Peliculas", callback_data="search:mode:movies"),
+                    InlineKeyboardButton("Series", callback_data="search:mode:series"),
+                ]
+            ]
+        )
+        self.send_text("Que quieres buscar?", chat_ids=[chat_id], reply_markup=keyboard)
+
     def send_search_selection_menu(self, chat_id: str, query: str, items: list[dict[str, Any]]) -> None:
         buttons = []
         for index, item in enumerate(items[:10], start=1):
@@ -144,13 +156,23 @@ class TelegramClient:
         )
         self.send_text("Acciones admin para esta ficha:", chat_ids=[chat_id], reply_markup=keyboard)
 
+    def send_search_again_action(self, chat_id: str) -> None:
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Buscar otra vez", callback_data="search:again")]]
+        )
+        self.send_text("Quieres hacer otra busqueda?", chat_ids=[chat_id], reply_markup=keyboard)
+
     def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         text = "Menu admin activado." if is_admin else "Menu de busqueda activado."
         self.send_text(f"{text} Abre el menu de comandos junto al campo de escritura.", chat_ids=[chat_id])
 
-    def request_search_query(self, chat_id: str) -> None:
+    def request_search_query(self, chat_id: str, mode: str = "all") -> None:
+        mode_label = {
+            "movies": "peliculas",
+            "series": "series",
+        }.get(mode, "peliculas o series")
         self.send_text(
-            "Escribe el titulo de la pelicula o serie que quieres buscar.",
+            f"Escribe el titulo de {mode_label} que quieres buscar.",
             chat_ids=[chat_id],
             reply_markup=ForceReply(selective=True),
         )
@@ -232,6 +254,7 @@ class TelegramClient:
             BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
             BotCommand("reenvia", "Reenviar por ID de Emby"),
             BotCommand("diagnostico", "Validar configuracion"),
+            BotCommand("estado", "Ver estado del bot"),
             BotCommand("version", "Ver version desplegada"),
             BotCommand("reload_menu", "Recargar menu de comandos"),
         ]

@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
 
 
@@ -13,6 +13,15 @@ def _parse_bool(raw: str, default: bool) -> bool:
     if not value:
         return default
     return value in {"1", "true", "yes", "on"}
+
+
+def _parse_chat_labels(raw: str) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for chunk in raw.split(","):
+        key, separator, label = chunk.strip().partition(":")
+        if separator and key.strip() and label.strip():
+            labels[key.strip()] = label.strip()
+    return labels
 
 
 @dataclass(frozen=True)
@@ -35,6 +44,7 @@ class Settings:
     playback_style: str
     app_timezone: str
     telegram_webhook_secret: str
+    chat_labels: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -49,6 +59,7 @@ class Settings:
         playback_style = os.getenv("PLAYBACK_STYLE", "compact").strip().lower()
         app_timezone = os.getenv("APP_TIMEZONE", "Europe/Madrid").strip()
         telegram_webhook_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+        chat_labels = _parse_chat_labels(os.getenv("CHAT_LABELS", ""))
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
@@ -112,4 +123,5 @@ class Settings:
             playback_style=playback_style,
             app_timezone=app_timezone,
             telegram_webhook_secret=telegram_webhook_secret,
+            chat_labels=chat_labels,
         )

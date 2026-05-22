@@ -22,6 +22,7 @@ def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.enable_playback_notifications is True
     assert settings.playback_notify_pause is False
     assert settings.telegram_webhook_secret == ""
+    assert settings.chat_labels == {}
 
 
 def test_settings_optional_targets_and_flags(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -35,6 +36,7 @@ def test_settings_optional_targets_and_flags(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("ENABLE_PLAYBACK_NOTIFICATIONS", "0")
     monkeypatch.setenv("PLAYBACK_NOTIFY_PAUSE", "true")
     monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "secret-token")
+    monkeypatch.setenv("CHAT_LABELS", "-1001:Novedades,library:Biblioteca")
 
     settings = Settings.from_env()
     assert settings.library_chat_ids == ["-2001"]
@@ -46,6 +48,7 @@ def test_settings_optional_targets_and_flags(monkeypatch: pytest.MonkeyPatch) ->
     assert settings.enable_playback_notifications is False
     assert settings.playback_notify_pause is True
     assert settings.telegram_webhook_secret == "secret-token"
+    assert settings.chat_labels == {"-1001": "Novedades", "library": "Biblioteca"}
 
 
 def test_settings_rejects_negative_debounce(monkeypatch: pytest.MonkeyPatch) -> None:
