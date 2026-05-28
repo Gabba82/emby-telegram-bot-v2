@@ -280,6 +280,8 @@ docker compose up -d --build
 
 ## Diagnostico rapido
 
+El comando `/diagnostico` o `/estado` muestra comprobaciones con estado `[OK]`, `[WARNING]` o `[ERROR]` para configuracion local, acceso a Emby, token de Telegram, chats configurados, timezone, secreto de webhook y destinos efectivos.
+
 ### No llegan notificaciones de reproduccion
 
 Comprueba en este orden:
@@ -290,7 +292,7 @@ Comprueba en este orden:
 4. Si usas destino separado, confirma `PLAYBACK_CHAT_IDS`; si esta vacio se usa `CHAT_IDS`.
 5. Comprueba que el bot puede escribir en ese chat: no debe estar bloqueado y debe seguir dentro del grupo/canal.
 6. Mira logs: `docker compose logs -f emby-telegram-bot`.
-7. Desde un chat autorizado puedes enviar `/diagnostico_playback` para validar configuracion, Emby API y Telegram API.
+7. Desde un chat autorizado puedes enviar `/diagnostico` o `/estado` para validar configuracion, Emby API y Telegram API.
 
 Los logs del bot muestran `raw_event` y `normalized_event`; si Emby envia `PlaybackStart`, debe aparecer `normalized_event=playback.start`.
 
@@ -428,8 +430,8 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - Al iniciar una busqueda sin texto, el bot deja filtrar por `Todo`, `Peliculas` o `Series`.
 - Despues de una ficha aparece `Buscar otra vez` para lanzar otra consulta sin volver al menu.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
-- En series, la ficha intenta mostrar temporadas y episodios disponibles.
-- En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano y audios; si hay varias versiones, lista cada una.
+- En series, la ficha intenta mostrar temporadas y episodios disponibles en rangos compactos.
+- En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano, video, audios y subtitulos; si hay varias versiones, lista cada una.
 
 ## Reenvio manual tras reidentificar en Emby
 
@@ -448,7 +450,7 @@ El menu de recientes muestra peliculas y series. Si Emby devuelve episodios reci
 
 Esto esta pensado para el caso en que Emby identifico mal una pelicula/serie al entrar en biblioteca. Reidentifica manualmente en Emby, espera a que Emby guarde la metadata y ejecuta `/reenviar`, `/reenviaultimo` o `/reenvia ID` por privado.
 
-Si haces una busqueda desde tu chat privado admin, la ficha del resultado incluye una accion `Reenviar esta ficha` para elegir destino sin copiar el ID a mano.
+Si haces una busqueda desde tu chat privado admin, la ficha del resultado incluye acciones para `Reenviar al canal` o elegir otro destino sin copiar el ID a mano.
 
 Para recibir esos mensajes, configura el webhook de Telegram apuntando a:
 

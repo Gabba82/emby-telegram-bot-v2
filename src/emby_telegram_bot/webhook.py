@@ -11,6 +11,12 @@ from typing import Any
 from flask import Flask, Request, Response, request
 
 from .config import Settings
+from .diagnostics import (
+    build_chat_reachability_checks,
+    build_config_checks,
+    build_runtime_checks,
+    format_diagnostic_report,
+)
 from .emby_client import EmbyClient
 from .episode_aggregator import EpisodeAggregator
 from .formatting import (
@@ -71,6 +77,19 @@ def create_app(settings: Settings) -> Flask:
         "movies": "Movie",
         "series": "Series",
     }
+    startup_checks = [
+        *build_config_checks(settings, library_targets, playback_targets, admin_targets),
+        *build_runtime_checks(emby, telegram),
+        *build_chat_reachability_checks(telegram, list(allowed_telegram_chats)),
+    ]
+    for check in startup_checks:
+        log_message = "Startup check %s %s: %s"
+        if check.status == "ERROR":
+            logging.error(log_message, check.status, check.label, check.detail)
+        elif check.status == "WARNING":
+            logging.warning(log_message, check.status, check.label, check.detail)
+        else:
+            logging.info(log_message, check.status, check.label, check.detail)
 
     def _should_send_playback_event(payload: dict[str, Any], activity_item: dict[str, Any]) -> bool:
         event_code = infer_activity_event_code(payload)
@@ -268,24 +287,19 @@ def create_app(settings: Settings) -> Flask:
         _open_resend_target_menu(chat_id, clean_item_id)
 
     def _send_diagnostics(chat_id: str, is_private_chat: bool) -> None:
-        lines = [
-            "Diagnostico del bot:",
-            f"- Chat actual: {chat_id}",
-            f"- Chat privado admin: {'si' if _is_admin_private_chat(chat_id, is_private_chat) else 'no'}",
-            f"- Notificaciones biblioteca: {'activas' if settings.enable_library_notifications else 'desactivadas'}",
-            f"- Notificaciones playback: {'activas' if settings.enable_playback_notifications else 'desactivadas'}",
-            f"- Destinos biblioteca: {', '.join(library_targets)}",
-            f"- Destinos playback: {', '.join(playback_targets)}",
+        checks = [
+            *build_config_checks(settings, library_targets, playback_targets, admin_targets),
+            *build_runtime_checks(emby, telegram),
+            *build_chat_reachability_checks(telegram, list(allowed_telegram_chats)),
         ]
-        try:
-            lines.append(f"- Emby API: ok ({emby.validate_credentials()})")
-        except Exception as exc:
-            logging.error("Emby diagnostic failed error_type=%s error=%s", type(exc).__name__, exc)
-            lines.append(f"- Emby API: error ({type(exc).__name__})")
-        try:
-            lines.append(f"- Telegram API: ok ({telegram.validate_credentials()})")
-        except Exception as exc:
-            lines.append(f"- Telegram API: error ({type(exc).__name__})")
+        lines = [
+            format_diagnostic_report(checks),
+            "",
+            f"Chat actual: {chat_id}",
+            f"Chat privado admin: {'si' if _is_admin_private_chat(chat_id, is_private_chat) else 'no'}",
+            f"Notificaciones biblioteca: {'activas' if settings.enable_library_notifications else 'desactivadas'}",
+            f"Notificaciones playback: {'activas' if settings.enable_playback_notifications else 'desactivadas'}",
+        ]
         telegram.send_text("\n".join(lines), chat_ids=[chat_id])
 
     def _send_help(chat_id: str, is_private_chat: bool) -> None:

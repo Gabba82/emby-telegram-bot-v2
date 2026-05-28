@@ -57,7 +57,7 @@ def test_build_caption_movie_uses_media_source_fallbacks() -> None:
     assert "WEB-DL" in caption
     assert "1080p" in caption
     assert "MKV" in caption
-    assert "1.0 GiB" in caption
+    assert "1.0 GB" in caption
 
 
 def test_build_caption_movie_hides_unknown_fields_instead_of_nd() -> None:
@@ -68,6 +68,33 @@ def test_build_caption_movie_hides_unknown_fields_instead_of_nd() -> None:
     caption = build_caption(item)
     assert "Archivo: Pelicula" in caption
     assert "N/D" not in caption
+
+
+def test_build_caption_grouped_episodes_uses_safe_wording_and_ranges() -> None:
+    item = {
+        "Type": "Episode",
+        "SeriesName": "The Bear",
+        "ParentIndexNumber": 3,
+        "MediaSources": [
+            {
+                "Container": "mkv",
+                "MediaStreams": [
+                    {"Type": "Video", "Height": 1080, "Codec": "hevc"},
+                    {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                    {"Type": "Subtitle", "Language": "spa", "IsForced": True},
+                ],
+            }
+        ],
+    }
+
+    caption = build_caption(item, season_mode=True, episode_list=["S03E01", "S03E02", "S03E04"])
+
+    assert "Serie actualizada: The Bear T03" in caption
+    assert "Temporada completa" not in caption
+    assert "Episodios añadidos: E01-E02, E04" in caption
+    assert "Video: HEVC" in caption
+    assert "Audio: Espanol · EAC3 · 5.1" in caption
+    assert "Subs: Espanol (forzados)" in caption
 
 
 def test_build_activity_caption_playback() -> None:
@@ -217,9 +244,9 @@ def test_build_search_item_caption_lists_movie_versions() -> None:
         }
     )
     assert "Versiones disponibles" in caption
-    assert "2160p" in caption
+    assert "4K" in caption
     assert "1080p" in caption
-    assert "Audio: spa" in caption
+    assert "Audio: Espanol" in caption
 
 
 def test_build_search_item_caption_lists_single_movie_version_details() -> None:
@@ -243,8 +270,8 @@ def test_build_search_item_caption_lists_single_movie_version_details() -> None:
     assert "Datos de la version" in caption
     assert "1080p" in caption
     assert "MKV" in caption
-    assert "Audio: spa" in caption
-    assert "eng" in caption
+    assert "Audio: Espanol" in caption
+    assert "Ingles" in caption
 
 
 def test_build_search_item_caption_lists_series_availability() -> None:
@@ -263,5 +290,6 @@ def test_build_search_item_caption_lists_series_availability() -> None:
         ],
     )
     assert "Temporadas disponibles" in caption
-    assert "T01: E01, E02, E03" in caption
+    assert "2 temporadas · 7 episodios disponibles" in caption
+    assert "T01: E01-E03" in caption
     assert "T02: 4 episodios" in caption

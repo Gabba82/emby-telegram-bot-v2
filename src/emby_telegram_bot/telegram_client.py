@@ -50,6 +50,18 @@ class TelegramClient:
             logging.error("Telegram credential validation failed error_type=%s error=%s", type(exc).__name__, exc)
             raise
 
+    def validate_chat(self, chat_id: str) -> str:
+        try:
+            return asyncio.run(self._get_chat_label(chat_id))
+        except Exception as exc:
+            logging.error(
+                "Telegram chat validation failed chat_id=%s error_type=%s error=%s",
+                chat_id,
+                type(exc).__name__,
+                exc,
+            )
+            raise
+
     def send_text(
         self,
         text: str,
@@ -152,7 +164,10 @@ class TelegramClient:
 
     def send_search_admin_actions(self, chat_id: str, item_id: str) -> None:
         keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Reenviar esta ficha", callback_data=f"resend:item:{item_id}")]]
+            [
+                [InlineKeyboardButton("Reenviar al canal", callback_data=f"resend:to:chat:{item_id}")],
+                [InlineKeyboardButton("Elegir destino", callback_data=f"resend:item:{item_id}")],
+            ]
         )
         self.send_text("Acciones admin para esta ficha:", chat_ids=[chat_id], reply_markup=keyboard)
 
@@ -241,6 +256,12 @@ class TelegramClient:
         async with Bot(token=self._token) as bot:
             me = await bot.get_me()
             return f"@{me.username}" if me.username else str(me.id)
+
+    async def _get_chat_label(self, chat_id: str) -> str:
+        async with Bot(token=self._token) as bot:
+            chat = await bot.get_chat(chat_id=chat_id)
+            title = getattr(chat, "title", None) or getattr(chat, "username", None) or getattr(chat, "first_name", None)
+            return str(title or chat.id)
 
     async def _configure_bot_commands(self, admin_chat_ids: list[str]) -> None:
         user_commands = [

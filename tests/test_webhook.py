@@ -91,6 +91,7 @@ class _FakeTelegramClient:
         self.command_configs = []
         self.search_requests = []
         self.callbacks = []
+        self.validated_chats = []
         _FakeTelegramClient.latest = self
 
     def send(self, caption: str, image_bytes, chat_ids=None) -> None:
@@ -134,6 +135,10 @@ class _FakeTelegramClient:
 
     def validate_credentials(self) -> str:
         return "@testbot"
+
+    def validate_chat(self, chat_id: str) -> str:
+        self.validated_chats.append(chat_id)
+        return f"chat-{chat_id}"
 
 
 def test_telegramhook_search_command(monkeypatch) -> None:
@@ -362,6 +367,25 @@ def test_telegramhook_private_admin_help_shows_admin_commands(monkeypatch) -> No
 
     assert response.status_code == 200
     assert "/reload_menu" in _FakeTelegramClient.latest.sent_texts[0][0]
+
+
+def test_telegramhook_diagnostics_reports_clear_statuses(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings(secret="secret-token"))
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": 42, "type": "private"}, "text": "/diagnostico"}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "secret-token"},
+    )
+
+    assert response.status_code == 200
+    diagnostic = _FakeTelegramClient.latest.sent_texts[-1][0]
+    assert "[OK] Emby API" in diagnostic
+    assert "[OK] Telegram API" in diagnostic
+    assert "[OK] Webhook Telegram" in diagnostic
+    assert "[OK] Chat 42" in diagnostic
 
 
 def test_telegramhook_private_admin_reload_menu_reconfigures_commands(monkeypatch) -> None:
