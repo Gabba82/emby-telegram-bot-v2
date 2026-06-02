@@ -358,7 +358,7 @@ def test_build_search_item_caption_lists_common_episode_streams_and_imdb() -> No
     )
 
     assert "T01: E01-E02" in caption
-    assert "Audio comun: Español · EAC3 · 5.1" in caption
+    assert "Audio: Español · EAC3 · 5.1" in caption
     assert "Ingles" not in caption
-    assert "Subs comunes: Español (forzados)" in caption
+    assert "Subs: Español (forzados)" in caption
     assert "IMDb: https://www.imdb.com/title/tt1111111/" in caption

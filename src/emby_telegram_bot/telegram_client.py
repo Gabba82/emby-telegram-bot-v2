@@ -306,7 +306,6 @@ class TelegramClient:
             BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
             BotCommand("reenvia", "Reenviar por ID de Emby"),
             BotCommand("diagnostico", "Validar configuracion"),
-            BotCommand("estado", "Ver estado del bot"),
             BotCommand("version", "Ver version desplegada"),
             BotCommand("reload_menu", "Recargar menu de comandos"),
         ]

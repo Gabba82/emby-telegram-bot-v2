@@ -359,12 +359,12 @@ def _common_episode_stream_lines(seasons: list[dict[str, Any]]) -> list[str]:
         common_audio = sorted(set.intersection(*audio_sets))
         audio = _format_stream_labels(common_audio, max_items=6)
         if audio:
-            lines.append(f"Audio comun: {audio}")
+            lines.append(f"Audio: {audio}")
     if subtitle_sets:
         common_subtitles = sorted(set.intersection(*subtitle_sets))
         subtitles = _format_stream_labels(common_subtitles, max_items=6)
         if subtitles:
-            lines.append(f"Subs comunes: {subtitles}")
+            lines.append(f"Subs: {subtitles}")
     return lines
 
 

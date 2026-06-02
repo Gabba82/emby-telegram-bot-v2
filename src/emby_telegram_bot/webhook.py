@@ -335,7 +335,6 @@ def create_app(settings: Settings) -> Flask:
                     "- /reenviaultimo: reenviar el ultimo contenido anadido.",
                     "- /reenvia ID_DE_EMBY: reenviar una ficha concreta.",
                     "- /diagnostico: validar Emby, Telegram y destinos.",
-                    "- /estado: ver estado del bot.",
                     "- /version: ver version desplegada.",
                     "- /reload_menu: recargar comandos del menu de Telegram.",
                 ]

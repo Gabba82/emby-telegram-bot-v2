@@ -280,7 +280,7 @@ docker compose up -d --build
 
 ## Diagnostico rapido
 
-El comando `/diagnostico` o `/estado` muestra comprobaciones con estado `[OK]`, `[WARNING]` o `[ERROR]` para configuracion local, acceso a Emby, token de Telegram, chats configurados, timezone, secreto de webhook y destinos efectivos.
+El comando `/diagnostico` muestra comprobaciones con estado `[OK]`, `[WARNING]` o `[ERROR]` para configuracion local, acceso a Emby, token de Telegram, chats configurados, timezone, secreto de webhook y destinos efectivos. `/estado` sigue funcionando como alias, pero no se muestra como comando separado para evitar duplicados.
 
 ### No llegan notificaciones de reproduccion
 
@@ -292,7 +292,7 @@ Comprueba en este orden:
 4. Si usas destino separado, confirma `PLAYBACK_CHAT_IDS`; si esta vacio se usa `CHAT_IDS`.
 5. Comprueba que el bot puede escribir en ese chat: no debe estar bloqueado y debe seguir dentro del grupo/canal.
 6. Mira logs: `docker compose logs -f emby-telegram-bot`.
-7. Desde un chat autorizado puedes enviar `/diagnostico` o `/estado` para validar configuracion, Emby API y Telegram API.
+7. Desde un chat autorizado puedes enviar `/diagnostico` para validar configuracion, Emby API y Telegram API.
 
 Los logs del bot muestran `raw_event` y `normalized_event`; si Emby envia `PlaybackStart`, debe aparecer `normalized_event=playback.start`.
 
@@ -396,7 +396,7 @@ Ejemplo completo en `.env.example`.
 
 - `TELEGRAM_TOKEN`: token de BotFather.
 - `CHAT_IDS`: uno o varios chat IDs separados por coma.
-- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico`, `/diagnostico_playback`, `/estado`, `/version`, `/reload_menu`). Si se deja vacio, se usan los `CHAT_IDS`.
+- `ADMIN_CHAT_IDS`: IDs privados autorizados para comandos administrativos (`/reenviar`, `/reenviaultimo`, `/lastadded`, `/reenvia ID`, `/diagnostico`, `/diagnostico_playback`, `/version`, `/reload_menu`). Si se deja vacio, se usan los `CHAT_IDS`.
 - `LIBRARY_CHAT_IDS`: opcional, destinos solo para altas de biblioteca (si vacio usa `CHAT_IDS`).
 - `PLAYBACK_CHAT_IDS`: opcional, destinos solo para eventos de reproduccion (si vacio usa `CHAT_IDS`).
 - `CHAT_LABELS`: opcional, nombres amigables para destinos. Acepta claves de destino (`private`, `chat`, `library`, `playback`, `admin`) o IDs concretos, por ejemplo `chat:Canal novedades,-100123:Grupo familia`.
@@ -423,7 +423,7 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - O envia directamente `/buscar nombre de la peli o serie`.
 - El menu de comandos de Telegram se configura al arrancar el bot. Los usuarios normales ven `/buscar`, `/help` y `/menu`.
 - En el chat privado con el bot, `/start` o `/menu` recuerda usar el menu de comandos junto al campo de escritura.
-- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/estado`, `/version` y `/reload_menu`.
+- Los admins definidos en `ADMIN_CHAT_IDS` ven comandos extra en su chat privado: `/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/version` y `/reload_menu`.
 - Si actualizas `ADMIN_CHAT_IDS` o cambias los comandos, reinicia el contenedor para que Telegram reciba el menu nuevo.
 - Si pulsas el boton desde un grupo autorizado, el bot intentara abrir la busqueda por privado con ese usuario para no ensuciar el chat.
 - El usuario debe haber iniciado antes una conversacion privada con el bot; si no, Telegram no permite que el bot le escriba.
@@ -443,7 +443,7 @@ Configura primero tu ID privado en `ADMIN_CHAT_IDS` y abre una conversacion priv
 - `/reenviaultimo` o `/lastadded`: consulta en Emby el ultimo elemento anadido (`Movie`, `Series` o `Episode`) y muestra el selector de destino.
 - `/reenvia 12345`: carga el item con ID de Emby `12345` y muestra el selector de destino.
 - `/diagnostico_playback`: valida credenciales y muestra destinos activos para reproduccion y biblioteca.
-- `/estado`: alias corto de diagnostico para ver configuracion y salud.
+- `/estado`: alias oculto de `/diagnostico` para ver configuracion y salud.
 - `/help`: muestra los comandos disponibles segun seas usuario normal o admin.
 - `/version`: muestra la version del paquete y el build configurado con `APP_VERSION`.
 - `/reload_menu`: vuelve a registrar el menu de comandos de Telegram sin reiniciar el contenedor.
