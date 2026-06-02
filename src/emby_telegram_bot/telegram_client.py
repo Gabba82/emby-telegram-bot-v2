@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import io
 import logging
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 from telegram import Bot, BotCommand, BotCommandScopeChat, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
+
+from .formatting import EXPANDABLE_SECTION_END, EXPANDABLE_SECTION_START
 
 
 PRIVATE_SEARCH_BUTTON_TEXT = "\U0001f50e Buscar pelicula o serie"
@@ -27,19 +30,41 @@ def safe_markdown_v2(text: str) -> str:
     return escape_markdown(text, version=2)
 
 
+def _format_html_caption(text: str) -> str:
+    output = []
+    remaining = text
+    while EXPANDABLE_SECTION_START in remaining:
+        before, _, rest = remaining.partition(EXPANDABLE_SECTION_START)
+        expandable, separator, remaining = rest.partition(EXPANDABLE_SECTION_END)
+        output.append(html.escape(before, quote=False))
+        if separator:
+            output.append(f"<blockquote expandable>{html.escape(expandable, quote=False)}</blockquote>")
+        else:
+            output.append(html.escape(expandable, quote=False))
+            remaining = ""
+    output.append(html.escape(remaining, quote=False))
+    return "".join(output)
+
+
+def format_caption_for_telegram(caption: str) -> tuple[str, str]:
+    if EXPANDABLE_SECTION_START in caption:
+        return _format_html_caption(caption), ParseMode.HTML
+    return safe_markdown_v2(caption), ParseMode.MARKDOWN_V2
+
+
 class TelegramClient:
     def __init__(self, token: str, chat_ids: list[str]) -> None:
         self._token = token
         self._chat_ids = chat_ids
 
     def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> None:
-        formatted_caption = safe_markdown_v2(caption)
+        formatted_caption, parse_mode = format_caption_for_telegram(caption)
         targets = chat_ids or self._chat_ids
         if not targets:
             logging.warning("Telegram send skipped because no target chat IDs were provided")
             return
         try:
-            asyncio.run(self._send_all(formatted_caption, image_bytes, targets))
+            asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets))
         except Exception as exc:
             logging.error("Telegram batch send failed error_type=%s error=%s", type(exc).__name__, exc)
 
@@ -204,7 +229,13 @@ class TelegramClient:
         except Exception as exc:
             logging.error("Telegram callback answer failed error=%s", exc)
 
-    async def _send_all(self, formatted_caption: str, image_bytes: bytes | None, targets: list[str]) -> None:
+    async def _send_all(
+        self,
+        formatted_caption: str,
+        parse_mode: str,
+        image_bytes: bytes | None,
+        targets: list[str],
+    ) -> None:
         async with Bot(token=self._token) as bot:
             for chat_id in targets:
                 try:
@@ -213,13 +244,13 @@ class TelegramClient:
                             chat_id=chat_id,
                             photo=io.BytesIO(image_bytes),
                             caption=formatted_caption,
-                            parse_mode=ParseMode.MARKDOWN_V2,
+                            parse_mode=parse_mode,
                         )
                     else:
                         await bot.send_message(
                             chat_id=chat_id,
                             text=formatted_caption,
-                            parse_mode=ParseMode.MARKDOWN_V2,
+                            parse_mode=parse_mode,
                         )
                 except Exception as exc:
                     logging.error(

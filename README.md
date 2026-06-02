@@ -433,6 +433,7 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - En series, la ficha intenta mostrar temporadas y episodios disponibles en rangos compactos. Si Emby devuelve detalles de episodios, tambien resume audio y subtitulos comunes a todos ellos.
 - En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano, video, audios y subtitulos; si hay varias versiones, lista cada una.
 - En peliculas y series, si Emby tiene ID de IMDb en `ProviderIds`, la ficha anade enlace directo a IMDb.
+- Cuando Telegram lo soporta, la sinopsis se envia como bloque desplegable para no ocupar toda la tarjeta.
 
 ## Reenvio manual tras reidentificar en Emby
 

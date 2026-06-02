@@ -6,6 +6,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 SECTION_DIVIDER = "━━━━━━━━━━━━"
+EXPANDABLE_SECTION_START = "[[EMBY_BOT_EXPANDABLE_START]]"
+EXPANDABLE_SECTION_END = "[[EMBY_BOT_EXPANDABLE_END]]"
 
 LANGUAGE_LABELS = {
     "ca": "Catalan",
@@ -310,6 +312,16 @@ def _format_external_links(item: dict[str, Any]) -> list[str]:
     return [f"IMDb: {imdb}"] if imdb else []
 
 
+def _expandable_section(text: str) -> str:
+    return f"{EXPANDABLE_SECTION_START}{text}{EXPANDABLE_SECTION_END}"
+
+
+def _short_overview(overview: str, max_length: int = 450) -> str:
+    if len(overview) <= max_length:
+        return overview
+    return overview[:max_length] + "..."
+
+
 def _common_episode_stream_lines(seasons: list[dict[str, Any]]) -> list[str]:
     audio_sets = []
     subtitle_sets = []
@@ -553,9 +565,7 @@ def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list:
 
     overview = _first_str(item.get("Overview"))
     if overview and item_type in {"Movie", "Series"} and not season_mode:
-        caption += f"\n\n{overview[:450]}"
-        if len(overview) > 450:
-            caption += "..."
+        caption += f"\n\nSinopsis:\n{_expandable_section(_short_overview(overview))}"
 
     specs = _build_file_specs(item, season_mode=season_mode)
     if specs:
@@ -670,9 +680,7 @@ def build_search_item_caption(
         caption += f" ({year})"
     overview = _first_str(item.get("Overview"))
     if overview:
-        caption += f"\n\n{overview[:450]}"
-        if len(overview) > 450:
-            caption += "..."
+        caption += f"\n\nSinopsis:\n{_expandable_section(_short_overview(overview))}"
     extra_lines = []
     if item_type == "Movie":
         extra_lines = _format_movie_versions(item)
