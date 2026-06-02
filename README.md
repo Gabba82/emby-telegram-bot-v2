@@ -430,8 +430,9 @@ El bot puede buscar peliculas y series en Emby desde Telegram.
 - Al iniciar una busqueda sin texto, el bot deja filtrar por `Todo`, `Peliculas` o `Series`.
 - Despues de una ficha aparece `Buscar otra vez` para lanzar otra consulta sin volver al menu.
 - En privado, si hay varios resultados se muestran como botones para elegir uno; al seleccionarlo se envia la ficha con caratula y sinopsis cuando Emby tiene esos datos.
-- En series, la ficha intenta mostrar temporadas y episodios disponibles en rangos compactos.
+- En series, la ficha intenta mostrar temporadas y episodios disponibles en rangos compactos. Si Emby devuelve detalles de episodios, tambien resume audio y subtitulos comunes a todos ellos.
 - En peliculas, la ficha intenta mostrar resolucion, contenedor, tamano, video, audios y subtitulos; si hay varias versiones, lista cada una.
+- En peliculas y series, si Emby tiene ID de IMDb en `ProviderIds`, la ficha anade enlace directo a IMDb.
 
 ## Reenvio manual tras reidentificar en Emby
 
@@ -447,6 +448,8 @@ Configura primero tu ID privado en `ADMIN_CHAT_IDS` y abre una conversacion priv
 - `/reload_menu`: vuelve a registrar el menu de comandos de Telegram sin reiniciar el contenedor.
 
 El menu de recientes muestra peliculas y series. Si Emby devuelve episodios recientes, el bot intenta agruparlos por serie para evitar reenviar capitulos uno a uno. El selector de destino usa los chats definidos en `.env`: `CHAT_IDS`, `LIBRARY_CHAT_IDS`, `PLAYBACK_CHAT_IDS`, `ADMIN_CHAT_IDS` y tu chat privado actual. Al confirmar, el bot vuelve a consultar Emby y regenera la notificacion con metadata actual.
+
+Al reenviar una serie, el bot consulta temporadas y episodios para reconstruir una ficha mas completa: temporadas disponibles, rangos de capitulos y, cuando Emby lo facilita, audio/subtitulos comunes en los episodios. Esto evita que el reenvio de una serie quede reducido a solo caratula y titulo.
 
 Esto esta pensado para el caso en que Emby identifico mal una pelicula/serie al entrar en biblioteca. Reidentifica manualmente en Emby, espera a que Emby guarde la metadata y ejecuta `/reenviar`, `/reenviaultimo` o `/reenvia ID` por privado.
 
