@@ -312,6 +312,12 @@ def _format_external_links(item: dict[str, Any]) -> list[str]:
     return [f"IMDb: {imdb}"] if imdb else []
 
 
+def _format_rating(value: Any) -> str:
+    if value in {None, ""}:
+        return ""
+    return f"{float(value):.1f}" if isinstance(value, (int, float)) else str(value)
+
+
 def _expandable_section(text: str) -> str:
     return f"{EXPANDABLE_SECTION_START}{text}{EXPANDABLE_SECTION_END}"
 
@@ -560,7 +566,7 @@ def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list:
         caption = f"🆕 Nuevo contenido: {name}"
 
     if rating:
-        rating_str = f"{float(rating):.1f}" if isinstance(rating, (int, float)) else str(rating)
+        rating_str = _format_rating(rating)
         caption += f"\n⭐ Valoración: {rating_str}/10"
 
     overview = _first_str(item.get("Overview"))
@@ -678,6 +684,9 @@ def build_search_item_caption(
     caption = f"{icon} {label}: {name}"
     if year:
         caption += f" ({year})"
+    rating = _format_rating(item.get("CommunityRating"))
+    if rating:
+        caption += f"\n⭐ Valoración: {rating}/10"
     overview = _first_str(item.get("Overview"))
     if overview:
         caption += f"\n\nSinopsis:\n{_expandable_section(_short_overview(overview))}"

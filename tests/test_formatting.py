@@ -235,10 +235,12 @@ def test_build_search_item_caption_includes_overview() -> None:
             "Type": "Movie",
             "Name": "John Wick",
             "ProductionYear": 2014,
+            "CommunityRating": 7.4,
             "Overview": "Un asesino retirado vuelve a la accion.",
         }
     )
     assert "Pelicula: John Wick (2014)" in caption
+    assert "Valoración: 7.4/10" in caption
     assert "Un asesino retirado" in caption
 
 
@@ -300,7 +302,7 @@ def test_build_search_item_caption_lists_single_movie_version_details() -> None:
 
 def test_build_search_item_caption_lists_series_availability() -> None:
     caption = build_search_item_caption(
-        {"Type": "Series", "Name": "Dorohedoro"},
+        {"Type": "Series", "Name": "Dorohedoro", "CommunityRating": 8.2},
         series_seasons=[
             {
                 "IndexNumber": 1,
@@ -313,6 +315,7 @@ def test_build_search_item_caption_lists_series_availability() -> None:
             {"IndexNumber": 2, "ChildCount": 4},
         ],
     )
+    assert "Valoración: 8.2/10" in caption
     assert "Temporadas disponibles" in caption
     assert "2 temporadas · 7 episodios disponibles" in caption
     assert "T01: E01-E03" in caption
