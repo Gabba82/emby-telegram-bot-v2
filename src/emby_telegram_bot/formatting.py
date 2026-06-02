@@ -551,6 +551,12 @@ def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list:
         rating_str = f"{float(rating):.1f}" if isinstance(rating, (int, float)) else str(rating)
         caption += f"\n⭐ Valoración: {rating_str}/10"
 
+    overview = _first_str(item.get("Overview"))
+    if overview and item_type in {"Movie", "Series"} and not season_mode:
+        caption += f"\n\n{overview[:450]}"
+        if len(overview) > 450:
+            caption += "..."
+
     specs = _build_file_specs(item, season_mode=season_mode)
     if specs:
         caption += f"\n{SECTION_DIVIDER}\n{specs}"

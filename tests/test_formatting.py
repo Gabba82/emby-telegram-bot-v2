@@ -37,6 +37,18 @@ def test_build_caption_movie() -> None:
     assert "WEB-DL" in caption
 
 
+def test_build_caption_movie_includes_overview() -> None:
+    item = {
+        "Type": "Movie",
+        "Name": "Inception",
+        "Overview": "Un ladron experto roba secretos del subconsciente durante los suenos.",
+    }
+
+    caption = build_caption(item)
+
+    assert "Un ladron experto" in caption
+
+
 def test_build_caption_movie_uses_media_source_fallbacks() -> None:
     item = {
         "Type": "Movie",
