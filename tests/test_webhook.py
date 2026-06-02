@@ -618,8 +618,8 @@ def test_telegramhook_resend_callback_sends_rich_series_card(monkeypatch) -> Non
     caption = _FakeTelegramClient.latest.sent_media[0][0]
     assert "Serie: Dorohedoro" in caption
     assert "T01: E01-E02" in caption
-    assert "Audio comun: Espanol · EAC3 · 5.1" in caption
-    assert "Subs comunes: Espanol (forzados)" in caption
+    assert "Audio comun: Español · EAC3 · 5.1" in caption
+    assert "Subs comunes: Español (forzados)" in caption
     assert "IMDb: https://www.imdb.com/title/tt1111111/" in caption
 
 

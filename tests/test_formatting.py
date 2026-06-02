@@ -117,8 +117,8 @@ def test_build_caption_grouped_episodes_uses_safe_wording_and_ranges() -> None:
     assert "Temporada completa" not in caption
     assert "Episodios añadidos: E01-E02, E04" in caption
     assert "Video: HEVC" in caption
-    assert "Audio: Espanol · EAC3 · 5.1" in caption
-    assert "Subs: Espanol (forzados)" in caption
+    assert "Audio: Español · EAC3 · 5.1" in caption
+    assert "Subs: Español (forzados)" in caption
 
 
 def test_build_activity_caption_playback() -> None:
@@ -270,7 +270,7 @@ def test_build_search_item_caption_lists_movie_versions() -> None:
     assert "Versiones disponibles" in caption
     assert "4K" in caption
     assert "1080p" in caption
-    assert "Audio: Espanol" in caption
+    assert "Audio: Español" in caption
 
 
 def test_build_search_item_caption_lists_single_movie_version_details() -> None:
@@ -294,7 +294,7 @@ def test_build_search_item_caption_lists_single_movie_version_details() -> None:
     assert "Datos de la version" in caption
     assert "1080p" in caption
     assert "MKV" in caption
-    assert "Audio: Espanol" in caption
+    assert "Audio: Español" in caption
     assert "Ingles" in caption
 
 
@@ -355,7 +355,7 @@ def test_build_search_item_caption_lists_common_episode_streams_and_imdb() -> No
     )
 
     assert "T01: E01-E02" in caption
-    assert "Audio comun: Espanol · EAC3 · 5.1" in caption
+    assert "Audio comun: Español · EAC3 · 5.1" in caption
     assert "Ingles" not in caption
-    assert "Subs comunes: Espanol (forzados)" in caption
+    assert "Subs comunes: Español (forzados)" in caption
     assert "IMDb: https://www.imdb.com/title/tt1111111/" in caption

@@ -8,7 +8,7 @@ def test_format_caption_for_telegram_uses_expandable_blockquote() -> None:
     caption = (
         f"Pelicula: Arrival\n\nSinopsis:\n"
         f"{EXPANDABLE_SECTION_START}Una linguista intenta comunicarse con visitantes extraterrestres."
-        f"{EXPANDABLE_SECTION_END}\nAudio: Espanol"
+        f"{EXPANDABLE_SECTION_END}\nAudio: Español"
     )
 
     formatted, parse_mode = format_caption_for_telegram(caption)
@@ -18,7 +18,7 @@ def test_format_caption_for_telegram_uses_expandable_blockquote() -> None:
     assert EXPANDABLE_SECTION_END not in formatted
     assert "<blockquote expandable>Una linguista" in formatted
     assert "</blockquote>" in formatted
-    assert "Audio: Espanol" in formatted
+    assert "Audio: Español" in formatted
 
 
 def test_format_caption_for_telegram_escapes_html_inside_expandable_blockquote() -> None:
@@ -28,4 +28,3 @@ def test_format_caption_for_telegram_escapes_html_inside_expandable_blockquote()
 
     assert parse_mode == ParseMode.HTML
     assert "A &lt; B &amp; C &gt; D" in formatted
-
