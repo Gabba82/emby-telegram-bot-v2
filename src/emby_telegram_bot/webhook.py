@@ -160,6 +160,59 @@ def create_app(settings: Settings) -> Flask:
             recent_library[key] = now
         return True
 
+    def _has_media_stream_details(item: dict[str, Any]) -> bool:
+        streams = item.get("MediaStreams")
+        if isinstance(streams, list) and streams:
+            return True
+        media_sources = item.get("MediaSources")
+        if not isinstance(media_sources, list):
+            return False
+        for source in media_sources:
+            if not isinstance(source, dict):
+                continue
+            streams = source.get("MediaStreams")
+            if isinstance(streams, list) and streams:
+                return True
+        return False
+
+    def _refresh_library_item(item: dict[str, Any], item_id: str | None) -> dict[str, Any]:
+        lookup_id = str(item_id or item.get("Id") or "").strip()
+        if not lookup_id:
+            return item
+
+        refreshed_item = item
+        for attempt in range(3):
+            try:
+                candidate = emby.get_item_by_id(lookup_id)
+                if candidate:
+                    refreshed_item = candidate
+            except Exception as exc:
+                logging.warning(
+                    "Cannot refresh library item id=%s attempt=%s error=%s",
+                    lookup_id,
+                    attempt + 1,
+                    exc,
+                )
+                return refreshed_item
+
+            if refreshed_item.get("Type") not in {"Movie", "Episode"}:
+                return refreshed_item
+
+            if _has_media_stream_details(refreshed_item):
+                if attempt:
+                    logging.info("Library item media details ready id=%s attempt=%s", lookup_id, attempt + 1)
+                return refreshed_item
+
+            if attempt < 2:
+                logging.info(
+                    "Library item has no media streams yet id=%s attempt=%s; retrying shortly",
+                    lookup_id,
+                    attempt + 1,
+                )
+                time.sleep(10)
+
+        return refreshed_item
+
     def flush_episode_group(sample_item: dict[str, Any], episode_list: list[str]) -> None:
         caption = build_caption(sample_item, season_mode=True, episode_list=episode_list)
         image = emby.get_item_image(sample_item)
@@ -720,6 +773,8 @@ def create_app(settings: Settings) -> Flask:
 
             if not _should_send_library_event(item, item_id):
                 return "", 200
+
+            item = _refresh_library_item(item, item_id)
 
             if item.get("Type") == "Episode":
                 aggregator.add_episode(item)

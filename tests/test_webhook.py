@@ -658,3 +658,38 @@ def test_embyhook_debounces_duplicate_library_event(monkeypatch) -> None:
     assert first_response.status_code == 200
     assert second_response.status_code == 200
     assert len(_FakeTelegramClient.latest.sent_media) == 1
+
+
+def test_embyhook_refreshes_library_item_before_sending(monkeypatch) -> None:
+    class DetailedEmbyClient(_FakeEmbyClient):
+        def get_item_info(self, item_id: str):
+            self.item_requests.append(item_id)
+            return {
+                "Id": item_id,
+                "Type": "Movie",
+                "Name": "Arrival",
+                "MediaSources": [
+                    {
+                        "Container": "mkv",
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                            {"Type": "Subtitle", "Language": "spa"},
+                        ],
+                    }
+                ],
+            }
+
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", DetailedEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/embyhook",
+        json={"Event": "library.new", "Item": {"Id": "movie-1", "Type": "Movie", "Name": "Arrival"}},
+    )
+
+    assert response.status_code == 200
+    assert _FakeEmbyClient.latest.item_requests == ["movie-1"]
+    caption = _FakeTelegramClient.latest.sent_media[0][0]
+    assert "Audio: Español · EAC3 · 5.1" in caption
+    assert "Subs: Español" in caption
