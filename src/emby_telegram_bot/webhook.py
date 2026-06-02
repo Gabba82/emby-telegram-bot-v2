@@ -229,7 +229,25 @@ def create_app(settings: Settings) -> Flask:
             ",".join(targets),
         )
         image = emby.get_item_image(item)
-        telegram.send(build_caption(item), image, chat_ids=targets)
+        telegram.send(_build_resend_caption(item), image, chat_ids=targets)
+
+    def _series_seasons_with_episodes(series_id: str) -> list[dict[str, Any]]:
+        seasons = emby.get_series_seasons(series_id)
+        for season in seasons:
+            season_id = season.get("Id")
+            if season_id:
+                season["Episodes"] = emby.get_season_episodes(series_id, str(season_id))
+        return seasons
+
+    def _build_resend_caption(item: dict[str, Any]) -> str:
+        if item.get("Type") != "Series" or not item.get("Id"):
+            return build_caption(item)
+        try:
+            series_seasons = _series_seasons_with_episodes(str(item["Id"]))
+        except Exception as exc:
+            logging.warning("Cannot fetch series details for resend id=%s error=%s", item.get("Id"), exc)
+            series_seasons = []
+        return build_search_item_caption(item, series_seasons=series_seasons)
 
     def _open_resend_item_menu(chat_id: str) -> None:
         try:
@@ -381,11 +399,7 @@ def create_app(settings: Settings) -> Flask:
         series_seasons = []
         if item.get("Type") == "Series" and item.get("Id"):
             try:
-                series_seasons = emby.get_series_seasons(str(item["Id"]))
-                for season in series_seasons:
-                    season_id = season.get("Id")
-                    if season_id:
-                        season["Episodes"] = emby.get_season_episodes(str(item["Id"]), str(season_id))
+                series_seasons = _series_seasons_with_episodes(str(item["Id"]))
             except Exception as exc:
                 logging.warning("Cannot fetch series availability id=%s error=%s", item.get("Id"), exc)
         image = emby.get_item_image(item)

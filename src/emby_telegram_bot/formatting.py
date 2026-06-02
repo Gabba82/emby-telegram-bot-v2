@@ -285,6 +285,71 @@ def _format_media_detail_lines(item: dict[str, Any], media_source: dict[str, Any
     return lines
 
 
+def _provider_ids(item: dict[str, Any]) -> dict[str, Any]:
+    provider_ids = item.get("ProviderIds")
+    return provider_ids if isinstance(provider_ids, dict) else {}
+
+
+def _imdb_url(item: dict[str, Any]) -> str:
+    provider_ids = _provider_ids(item)
+    imdb_id = _first_str(
+        provider_ids.get("Imdb"),
+        provider_ids.get("IMDb"),
+        provider_ids.get("IMDB"),
+        provider_ids.get("imdb"),
+    )
+    if not imdb_id:
+        return ""
+    if not imdb_id.startswith("tt"):
+        imdb_id = f"tt{imdb_id}"
+    return f"https://www.imdb.com/title/{imdb_id}/"
+
+
+def _format_external_links(item: dict[str, Any]) -> list[str]:
+    imdb = _imdb_url(item)
+    return [f"IMDb: {imdb}"] if imdb else []
+
+
+def _common_episode_stream_lines(seasons: list[dict[str, Any]]) -> list[str]:
+    audio_sets = []
+    subtitle_sets = []
+    for season in seasons:
+        episodes = season.get("Episodes")
+        if not isinstance(episodes, list):
+            continue
+        for episode in episodes:
+            if not isinstance(episode, dict):
+                continue
+            media_source = _extract_primary_media_source(episode)
+            audio = {
+                _audio_label(stream)
+                for stream in _streams_by_type(episode, media_source, "audio")
+                if _audio_label(stream)
+            }
+            subtitles = {
+                _subtitle_label(stream)
+                for stream in _streams_by_type(episode, media_source, "subtitle")
+                if _subtitle_label(stream)
+            }
+            if audio:
+                audio_sets.append(audio)
+            if subtitles:
+                subtitle_sets.append(subtitles)
+
+    lines = []
+    if audio_sets:
+        common_audio = sorted(set.intersection(*audio_sets))
+        audio = _format_stream_labels(common_audio, max_items=6)
+        if audio:
+            lines.append(f"Audio comun: {audio}")
+    if subtitle_sets:
+        common_subtitles = sorted(set.intersection(*subtitle_sets))
+        subtitles = _format_stream_labels(common_subtitles, max_items=6)
+        if subtitles:
+            lines.append(f"Subs comunes: {subtitles}")
+    return lines
+
+
 def _event_label(event_code: str) -> str:
     mapping = {
         "playback.start": "▶️ Reproduccion iniciada",
@@ -489,6 +554,9 @@ def build_caption(item: dict[str, Any], season_mode: bool = False, episode_list:
     specs = _build_file_specs(item, season_mode=season_mode)
     if specs:
         caption += f"\n{SECTION_DIVIDER}\n{specs}"
+    external_links = _format_external_links(item)
+    if external_links:
+        caption += f"\n{SECTION_DIVIDER}\n" + "\n".join(external_links)
     return caption
 
 
@@ -570,6 +638,9 @@ def _format_series_availability(seasons: list[dict[str, Any]], max_seasons: int 
     summary = f"{len(seasons)} temporadas"
     if total_episodes:
         summary += f" · {total_episodes} episodios disponibles"
+    common_streams = _common_episode_stream_lines(seasons)
+    if common_streams:
+        lines.extend(["", *common_streams])
     return [summary, "Temporadas disponibles:", *lines]
 
 
@@ -603,4 +674,7 @@ def build_search_item_caption(
         extra_lines = _format_series_availability(series_seasons)
     if extra_lines:
         caption += f"\n\n{SECTION_DIVIDER}\n" + "\n".join(extra_lines)
+    external_links = _format_external_links(item)
+    if external_links:
+        caption += f"\n\n{SECTION_DIVIDER}\n" + "\n".join(external_links)
     return _trim_caption(caption)

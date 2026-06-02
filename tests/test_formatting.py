@@ -60,6 +60,18 @@ def test_build_caption_movie_uses_media_source_fallbacks() -> None:
     assert "1.0 GB" in caption
 
 
+def test_build_caption_movie_includes_imdb_link() -> None:
+    caption = build_caption(
+        {
+            "Type": "Movie",
+            "Name": "Inception",
+            "ProviderIds": {"Imdb": "tt1375666"},
+        }
+    )
+
+    assert "IMDb: https://www.imdb.com/title/tt1375666/" in caption
+
+
 def test_build_caption_movie_hides_unknown_fields_instead_of_nd() -> None:
     item = {
         "Type": "Movie",
@@ -293,3 +305,45 @@ def test_build_search_item_caption_lists_series_availability() -> None:
     assert "2 temporadas · 7 episodios disponibles" in caption
     assert "T01: E01-E03" in caption
     assert "T02: 4 episodios" in caption
+
+
+def test_build_search_item_caption_lists_common_episode_streams_and_imdb() -> None:
+    caption = build_search_item_caption(
+        {"Type": "Series", "Name": "Dorohedoro", "ProviderIds": {"Imdb": "tt1111111"}},
+        series_seasons=[
+            {
+                "IndexNumber": 1,
+                "Episodes": [
+                    {
+                        "IndexNumber": 1,
+                        "MediaSources": [
+                            {
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                                    {"Type": "Audio", "Language": "eng", "Codec": "aac", "Channels": 2},
+                                    {"Type": "Subtitle", "Language": "spa", "IsForced": True},
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "IndexNumber": 2,
+                        "MediaSources": [
+                            {
+                                "MediaStreams": [
+                                    {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                                    {"Type": "Subtitle", "Language": "spa", "IsForced": True},
+                                ],
+                            }
+                        ],
+                    },
+                ],
+            },
+        ],
+    )
+
+    assert "T01: E01-E02" in caption
+    assert "Audio comun: Espanol · EAC3 · 5.1" in caption
+    assert "Ingles" not in caption
+    assert "Subs comunes: Espanol (forzados)" in caption
+    assert "IMDb: https://www.imdb.com/title/tt1111111/" in caption

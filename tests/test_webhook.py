@@ -41,6 +41,13 @@ class _FakeEmbyClient:
 
     def get_item_info(self, item_id: str):
         self.item_requests.append(item_id)
+        if item_id == "series-1":
+            return {
+                "Id": item_id,
+                "Type": "Series",
+                "Name": "Dorohedoro",
+                "ProviderIds": {"Imdb": "tt1111111"},
+            }
         return {
             "Id": item_id,
             "Type": "Movie",
@@ -68,7 +75,30 @@ class _FakeEmbyClient:
         return [{"Id": "season-1", "IndexNumber": 1}]
 
     def get_season_episodes(self, series_id: str, season_id: str):
-        return [{"IndexNumber": 1}, {"IndexNumber": 2}]
+        return [
+            {
+                "IndexNumber": 1,
+                "MediaSources": [
+                    {
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                            {"Type": "Subtitle", "Language": "spa", "IsForced": True},
+                        ]
+                    }
+                ],
+            },
+            {
+                "IndexNumber": 2,
+                "MediaSources": [
+                    {
+                        "MediaStreams": [
+                            {"Type": "Audio", "Language": "spa", "Codec": "eac3", "Channels": 6},
+                            {"Type": "Subtitle", "Language": "spa", "IsForced": True},
+                        ]
+                    }
+                ],
+            },
+        ]
 
     def get_item_image(self, item):
         return b"image"
@@ -565,6 +595,32 @@ def test_telegramhook_resend_callback_sends_to_selected_target(monkeypatch) -> N
     assert "John Wick" in _FakeTelegramClient.latest.sent_media[0][0]
     assert _FakeTelegramClient.latest.sent_media[0][2] == ["-1001"]
     assert _FakeTelegramClient.latest.callbacks[0] == ("callback-3", "Reenviando...", False)
+
+
+def test_telegramhook_resend_callback_sends_rich_series_card(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+
+    response = app.test_client().post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "callback-series",
+                "from": {"id": 42},
+                "data": "resend:to:chat:series-1",
+                "message": {"chat": {"id": 42, "type": "private"}},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    caption = _FakeTelegramClient.latest.sent_media[0][0]
+    assert "Serie: Dorohedoro" in caption
+    assert "T01: E01-E02" in caption
+    assert "Audio comun: Espanol · EAC3 · 5.1" in caption
+    assert "Subs comunes: Espanol (forzados)" in caption
+    assert "IMDb: https://www.imdb.com/title/tt1111111/" in caption
 
 
 def test_embyhook_accepts_pascal_case_playback_event(monkeypatch) -> None:

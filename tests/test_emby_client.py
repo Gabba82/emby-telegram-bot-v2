@@ -121,6 +121,8 @@ def test_get_season_episodes(monkeypatch) -> None:
     def fake_get(path, params=None, stream=False):
         assert path == "Shows/series-1/Episodes"
         assert params["SeasonId"] == "season-1"
+        assert "MediaStreams" in params["Fields"]
+        assert "MediaSources" in params["Fields"]
         return _FakeResponse({"Items": [{"Id": "ep-1", "IndexNumber": 1}]})
 
     monkeypatch.setattr(client, "_get", fake_get)

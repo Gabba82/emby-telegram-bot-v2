@@ -185,7 +185,10 @@ class EmbyClient:
         try:
             payload = self._get(
                 f"Shows/{series_id}/Episodes",
-                params={"SeasonId": season_id, "Fields": "IndexNumber,ParentIndexNumber"},
+                params={
+                    "SeasonId": season_id,
+                    "Fields": "IndexNumber,ParentIndexNumber,MediaStreams,MediaSources,Path,Container,Size",
+                },
             ).json()
         except Exception:
             logging.debug("Shows episodes lookup failed for season=%s; trying Items fallback", season_id)
@@ -195,7 +198,7 @@ class EmbyClient:
                     "ParentId": season_id,
                     "IncludeItemTypes": "Episode",
                     "Recursive": "true",
-                    "Fields": "IndexNumber,ParentIndexNumber",
+                    "Fields": "IndexNumber,ParentIndexNumber,MediaStreams,MediaSources,Path,Container,Size",
                 },
             ).json()
         items = payload.get("Items", [])
