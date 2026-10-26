@@ -1,170 +1,79 @@
-# Deployment Step by Step (Beginner Friendly)
+# Despliegue paso a paso (EMBY-005)
 
-Esta guia explica como desplegar el bot sin conocimientos tecnicos avanzados.
+Guía para empezar desde cero. La referencia completa es [`INSTALLATION.md`](INSTALLATION.md); ante cualquier diferencia, manda esa. Para migrar una instalación existente: [`MIGRATION.md`](MIGRATION.md).
 
-## 1. Preparar Telegram
+## 1. Prepara Telegram
 
-### 1.1 Crear el bot
+1. En Telegram abre `@BotFather`, escribe `/newbot` y guarda el token (`123456789:AA...`).
+2. Añade el bot al grupo o canal de avisos (si es canal, con permiso para publicar).
+3. Obtén el `chat_id`: escribe un mensaje en el grupo y abre `https://api.telegram.org/bot<TU_TOKEN>/getUpdates`; busca `chat` → `id` (en supergrupos empieza por `-100`).
+4. Para tu ID privado (`ADMIN_CHAT_IDS`), escribe al bot en privado y repite `getUpdates`.
 
-1. Abre Telegram y busca `@BotFather`.
-2. Escribe `/newbot`.
-3. Sigue las instrucciones y guarda el token final.
+Varios destinos van separados por comas: `CHAT_IDS=-1001234567890,-1009876543210`.
 
-Ejemplo de token:
+## 2. Prepara Emby
 
-`123456789:AAExampleToken`
+Como administrador: **Claves de API** → crear una clave. Anota la URL base, con formato `http://IP_O_HOST:8096/emby`.
 
-### 1.2 Anadir el bot al grupo o canal
-
-1. Crea (o abre) el grupo/canal donde quieres los avisos.
-2. Anade el bot como miembro.
-3. Si es canal, dale permisos para publicar.
-
-### 1.3 Obtener el chat_id
-
-Metodo simple:
-
-1. Envia un mensaje al grupo/canal con el bot dentro.
-2. Abre en navegador:
-`https://api.telegram.org/bot<TU_TOKEN>/getUpdates`
-3. Busca `chat` -> `id`.
-
-Ejemplo de chat ID de supergrupo:
-
-`-1001234567890`
-
-Si quieres enviar a varios destinos:
-
-`CHAT_IDS=-1001234567890,-1009876543210`
-
-## 2. Preparar Emby
-
-### 2.1 Obtener API key
-
-1. Entra en Emby como admin.
-2. Ve a configuracion de API keys.
-3. Crea una nueva key y copiala.
-
-### 2.2 Confirmar URL de Emby
-
-Formato esperado:
-
-`http://IP_O_HOST:8096/emby`
-
-Ejemplo:
-
-`http://192.168.1.112:8096/emby`
-
-## 3. Descargar y configurar el proyecto
-
-### 3.1 Clonar repo
+## 3. Configura el proyecto
 
 ```bash
-git clone <URL_DEL_REPO>
-cd emby-telegram-bot-v2
-```
-
-### 3.2 Crear archivo de entorno
-
-Linux/macOS:
-```bash
+git clone <URL_DEL_REPO> && cd <directorio>
 cp .env.example .env
 ```
 
-Windows PowerShell:
-```powershell
-Copy-Item .env.example .env
-```
+Rellena al menos `TELEGRAM_TOKEN`, `EMBY_API_KEY` y `CHAT_IDS` (y `EMBY_API_URL` si Emby no está en `http://emby:8096/emby`). El resto tiene valores por defecto razonables. Sin esos tres valores el contenedor no arranca.
 
-### 3.3 Editar `.env`
-
-Rellena todos los campos:
-
-```env
-TELEGRAM_TOKEN=tu_token_de_botfather
-CHAT_IDS=-1001234567890
-ADMIN_CHAT_IDS=123456789
-CHAT_LABELS=chat:Canal novedades,private:Mi privado
-EMBY_API_URL=http://192.168.1.112:8096/emby
-EMBY_API_KEY=tu_api_key_de_emby
-REQUEST_TIMEOUT_SECONDS=15
-EPISODE_BUFFER_SECONDS=60
-```
-
-## 4. Desplegar con Docker
-
-En la carpeta del proyecto:
+## 4. Despliega
 
 ```bash
-docker compose up --build -d
-```
-
-Comprobar que esta levantado:
-
-```bash
+docker compose --profile production up --build -d
 docker compose ps
+curl -fsS http://127.0.0.1:8081/health      # {"status":"ok"}
+docker compose exec app id                  # uid=10001
 ```
 
-Comprobar salud:
+Sin `--profile production` Compose **no** arranca el servicio `app`. Para una segunda instalación en el mismo equipo usa otro `COMPOSE_PROJECT_NAME` y otro `APP_PORT`.
+
+## 5. Webhooks
+
+- **Emby** → URL `http://TU_HOST:8081/embyhook`, método `POST`. Esta ruta no usa secreto: protégela por red (red interna, VPN o lista de IP) o con una cabecera propia en tu proxy.
+- **Telegram** → `/telegramhook` con HTTPS y, opcionalmente, `TELEGRAM_WEBHOOK_SECRET`. Los comandos `curl` de `setWebhook` están en [`USAGE.md`](USAGE.md#8-webhook-de-telegram-y-https).
+
+## 6. Prueba
+
+1. Añade una película o un episodio en Emby y comprueba el grupo de Telegram.
+2. Abre el bot en privado, pulsa **Iniciar** y escribe `/buscar`.
+3. Si no llega nada: `docker compose logs -f app`.
+
+## 7. Panel (opcional)
+
+Desactivado por defecto. Para activarlo (`PANEL_ENABLED=true`, contraseña de 16 caracteres o más, clave de sesión de 32 o más, y HTTPS) sigue la sección 4 de [`INSTALLATION.md`](INSTALLATION.md). Para probarlo sin credenciales reales usa la demostración ([`USAGE.md`](USAGE.md#4-demostración-local-linux-y-windows)).
+
+## 8. Copias de seguridad y actualización
 
 ```bash
-curl http://localhost:8081/health
-```
-
-Respuesta esperada:
-
-```json
-{"status":"ok"}
-```
-
-## 5. Configurar webhook en Emby
-
-En el plugin de webhook de Emby:
-
-- URL: `http://TU_HOST:8081/embyhook`
-- Metodo: `POST`
-
-## 6. Probar funcionamiento
-
-1. Anade una pelicula o episodio en Emby.
-2. Revisa Telegram.
-3. Si falla, revisa logs:
-
-```bash
-docker compose logs -f
-```
-
-## 7. Actualizar a futuro
-
-Cuando haya cambios nuevos:
-
-```bash
+scripts/backup.sh /ruta/segura          # en caliente; el contenedor debe estar en marcha
 git pull
-docker compose up --build -d
+docker compose --profile production up --build -d
 ```
 
-## 8. Problemas frecuentes
+Restaurar exige parar antes el servicio (`docker compose stop app`, no `down`) y usar `scripts/restore.sh <copia>`; ver [`MIGRATION.md`](MIGRATION.md) e [`INSTALLATION.md`](INSTALLATION.md).
 
-### No llega nada a Telegram
+## 9. Problemas frecuentes
 
-- Revisa `TELEGRAM_TOKEN`.
-- Asegura que el bot este dentro del grupo/canal.
-- Verifica que `CHAT_IDS` sea correcto.
+| Síntoma | Causa probable |
+|---|---|
+| `docker compose up` no arranca nada | falta `--profile production` |
+| El contenedor se detiene al arrancar | falta `TELEGRAM_TOKEN`, `EMBY_API_KEY` o `CHAT_IDS`, o el panel está activado con credenciales no válidas |
+| No llega nada a Telegram | bot fuera del grupo o `CHAT_IDS` incorrecto |
+| Emby no alcanza el bot | IP, puerto o cortafuegos; prueba `/health` desde la red de Emby |
+| El panel no acepta el login | falta HTTPS (cookie `Secure`) |
+| El panel no existe | `PANEL_ENABLED` sigue en `false` |
+| No se escribe en `/data` | el volumen no es del UID 10001; recrea el volumen |
 
-### Emby no alcanza el bot
+## 10. Buenas prácticas
 
-- Comprueba IP/puerto.
-- Comprueba firewall.
-- Prueba desde la red de Emby:
-  - `http://TU_HOST:8081/health`
-
-### Mensajes con caracteres raros o fallos de parseo
-
-- El bot ya escapa MarkdownV2, pero revisa logs si hay metadatos muy especiales.
-
-## 9. Buenas practicas
-
-- No subas `.env` al repositorio.
-- Rota claves si se filtran.
-- Haz backup de tu `.env`.
-- Limita acceso al puerto 8081 a red de confianza.
+- No subas `.env` al repositorio y rota las claves si se filtran.
+- Haz una copia del historial antes de cada actualización.
+- Limita el puerto 8081 a la red de confianza o publícalo tras un proxy inverso con TLS.

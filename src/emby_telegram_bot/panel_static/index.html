@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Solo mismo origen: scripts y estilos propios, sin CDN, sin estilos ni scripts en línea. Las carátulas llegan por image_url de la API. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; font-src 'none'; media-src 'none'">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#121316">
+  <meta name="referrer" content="no-referrer">
+  <title>Emby Telegram Manager</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/manager/static/css/panel.css">
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <div id="mode-banner" class="mode-banner" role="status" hidden></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand__logo" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false">
+        <rect x="2" y="2" width="28" height="28" rx="8" fill="#ffb020"/>
+        <path d="M12 9.5v13l11-6.5z" fill="#1a1204"/>
+      </svg>
+      <div>
+        <h1 class="brand__name">Emby Telegram Manager</h1>
+        <p class="brand__sub">Panel de publicación</p>
+      </div>
+    </div>
+    <nav id="nav" class="nav" aria-label="Secciones" hidden>
+      <button type="button" data-action="view" data-view="library">Biblioteca</button>
+      <button type="button" data-action="view" data-view="history">Historial</button>
+      <button type="button" data-action="view" data-view="reconciliation">Conciliación</button>
+      <button type="button" data-action="view" data-view="send">Envío</button>
+    </nav>
+    <button type="button" id="logout" class="btn btn--ghost btn--sm" data-action="logout" hidden>Cerrar sesión</button>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <div id="view" class="wrap">
+      <noscript><p class="empty">Este panel necesita JavaScript.</p></noscript>
+    </div>
+  </main>
+
+  <div id="tray"></div>
+
+  <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title">
+    <div id="dialog-body"></div>
+  </dialog>
+
+  <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+  <script src="/manager/static/js/api.js"></script>
+  <script src="/manager/static/js/store.js"></script>
+  <script src="/manager/static/js/views.js"></script>
+  <script src="/manager/static/js/reconciliation.js"></script>
+  <script src="/manager/static/js/app.js"></script>
+</body>
+</html>

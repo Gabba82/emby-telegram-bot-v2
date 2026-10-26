@@ -1,0 +1,20 @@
+# EMBY-005 — smoke totalmente aislado (perfil `demo`).
+#
+#   docker compose -p emby005smoke -f docker-compose.yml -f docker-compose.smoke.yml \
+#     --profile demo up -d
+#
+# Con `network_mode: none` el contenedor NO tiene red: no puede abrir ninguna
+# conexion saliente y no publica puertos. La comprobacion se hace DENTRO del
+# contenedor con `docker exec`, no desde el host:
+#
+#   docker exec emby005smoke-demo-1 curl -fsS http://127.0.0.1:8093/health
+#   docker exec emby005smoke-demo-1 id
+#   docker inspect -f '{{.HostConfig.NetworkMode}}' emby005smoke-demo-1   # -> none
+#
+# Limpieza:
+#
+#   docker compose -p emby005smoke -f docker-compose.yml -f docker-compose.smoke.yml down -v
+
+services:
+  demo:
+    network_mode: none

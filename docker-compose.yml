@@ -1,10 +1,83 @@
+# EMBY-005 — docker compose
+#
+#   * app    (perfil `production`) -> bot real con credenciales de .env. Panel OFF
+#              salvo PANEL_ENABLED=true.
+#   * demo   (perfil `demo`)       -> app de demostracion con datos sinteticos, sin
+#              credenciales. Sin puertos: se publican en los overrides.
+#
+# Overrides (se combinan con -f, sin etiquetas !override/!reset para no exigir
+# una version concreta de Compose):
+#
+#   demo usable en local:   docker compose -f docker-compose.yml -f docker-compose.demo.yml \
+#                             --profile demo up -d
+#   smoke aislado:          docker compose -f docker-compose.yml -f docker-compose.smoke.yml \
+#                             --profile demo up -d
+#
+# Convenciones para permitir instalaciones paralelas:
+#   * sin `container_name` fijo: Compose deriva el nombre del proyecto.
+#   * sin `name:` en los volumenes: el volumen se llama <proyecto>_history-data.
+#   * la imagen es sustituible por APP_IMAGE (rollback, ver docs/MIGRATION.md).
+#
+# Ningun valor de credenciales esta escrito en este fichero.
+
 services:
-  emby-telegram-bot:
-    build: .
-    container_name: emby-telegram-bot-v2
+  # ------------------------------------------------------------------ #
+  # Produccion: requiere un .env real con TELEGRAM_TOKEN/EMBY_API_KEY/CHAT_IDS #
+  # ------------------------------------------------------------------ #
+  app:
+    image: ${APP_IMAGE:-emby-telegram-bot-v2:0.5.0}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: "0.5.0"
+    profiles: ["production"]
+    restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # El panel es opt-in y falla cerrado. Nunca activar estos valores en una demo.
+      PANEL_ENABLED: ${PANEL_ENABLED:-false}
+      PANEL_ALLOW_SENDS: ${PANEL_ALLOW_SENDS:-false}
+      HISTORY_DB_PATH: /data/history.sqlite3
+    volumes:
+      - history-data:/data
     ports:
-      - "8081:8081"
-    restart: unless-stopped
+      # El panel usa cookie Secure: debe servirse detras de proxy inverso con HTTPS.
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
+  # ------------------------------------------------------------------ #
+  # Demo: datos sinteticos, sin credenciales.                            #
+  #                                                                    #
+  # La app de demo (scripts/run_manager.py) NO lee PANEL_* ni credenciales: #
+  # sirve con su contrasena de demostracion publica y bloquea las salidas. #
+  # Por eso no hay bloque `environment` con contrasenas de demo: no          #
+  # existirian. El aislamiento lo da Compose: env_file vacio y, en el smoke, #
+  # network_mode: none.                                                     #
+  # ------------------------------------------------------------------ #
+  demo:
+    image: ${DEMO_IMAGE:-emby-telegram-bot-v2:0.5.0-demo}
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    profiles: ["demo"]
+    restart: unless-stopped
+    env_file: []          # deliberadamente vacio: la demo no hereda .env
+    volumes:
+      - demo-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8093/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  history-data:
+  demo-data:

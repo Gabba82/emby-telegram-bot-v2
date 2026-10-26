@@ -1,9 +1,39 @@
+# Secrets: never commit real credentials.
 .env
+.env.*
+!.env.example
+
+# Python
 __pycache__/
-*.pyc
-.pytest_cache/
-pytest-cache-files-*/
-*.log
-dist/
-build/
+*.py[cod]
 *.egg-info/
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime state: SQLite history lives in the mounted volume, not in git.
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local environments and private backup files
+.venv/
+venv/
+backups/
+*.sqlite
+*.db
+/screenshots/

@@ -1,6 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
+import hashlib
+import sqlite3
+import uuid
 import logging
 import os
 import threading
@@ -11,6 +14,8 @@ from typing import Any
 from flask import Flask, Request, Response, request
 
 from .config import Settings
+from .deliveries import DeliveryStore, DecisionRequired, STATUS_LABELS
+from .publications import PublicationService
 from .diagnostics import (
     build_chat_reachability_checks,
     build_config_checks,
@@ -53,14 +58,24 @@ def _extract_payload(req: Request) -> dict[str, Any]:
     return payload
 
 
-def create_app(settings: Settings) -> Flask:
+def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel: dict | None = None) -> Flask:
     app = Flask(__name__)
+    store = store if store is not None else DeliveryStore(settings.history_db_path)
+    app.extensions["delivery_store"] = store
+
+    @app.errorhandler(sqlite3.Error)
+    def storage_error(exc):
+        logging.error("Publication storage unavailable error_type=%s", type(exc).__name__)
+        return "Historial no disponible; consulta antes de repetir un envio.", 503
+
     emby = EmbyClient(
         base_url=settings.emby_api_url,
         api_key=settings.emby_api_key,
         timeout_seconds=settings.request_timeout_seconds,
     )
     telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
+    publications = PublicationService(store, telegram, emby.get_item_image)
+    app.extensions["publications"] = publications
     telegram.configure_bot_commands(settings.admin_chat_ids)
     playback_targets = settings.playback_chat_ids or settings.chat_ids
     library_targets = settings.library_chat_ids or settings.chat_ids
@@ -141,7 +156,9 @@ def create_app(settings: Settings) -> Flask:
         return True
 
     def _should_send_library_event(item: dict[str, Any], item_id: str | None) -> bool:
-        if settings.library_debounce_seconds == 0:
+        # Identified media use the durable operation key. Do not suppress a retry
+        # after a storage failure using an earlier in-memory timestamp.
+        if item_id or item.get("Id") or settings.library_debounce_seconds == 0:
             return True
         item_key = str(item_id or item.get("Id") or item.get("Name") or "unknown_item")
         item_type = str(item.get("Type") or "unknown_type")
@@ -213,10 +230,63 @@ def create_app(settings: Settings) -> Flask:
 
         return refreshed_item
 
+    server_key = hashlib.sha256(settings.emby_api_url.encode()).hexdigest()[:16]
+    episode_send_lock = threading.Lock()
+
+    def _automatic_key(item):
+        identity = str(item.get("Id") or uuid.uuid4().hex)
+        return f"library:{server_key}:{identity}"
+
+    def _episode_caption(items):
+        tags = sorted({f"S{int(i.get('ParentIndexNumber') or 0):02}E{int(i.get('IndexNumber') or 0):02}" for i in items})
+        return build_caption(items[-1], season_mode=True, episode_list=tags)
+
     def flush_episode_group(sample_item: dict[str, Any], episode_list: list[str]) -> None:
-        caption = build_caption(sample_item, season_mode=True, episode_list=episode_list)
-        image = emby.get_item_image(sample_item)
-        telegram.send(caption, image, chat_ids=library_targets)
+        items = sample_item.get("_notification_items") or [sample_item]
+        with episode_send_lock:
+            publications.publish_episode_group(items, library_targets, _automatic_key, _episode_caption)
+
+    def _delivery_summary(rows):
+        lines = ["Resultado por destino:"]
+        for row in rows:
+            label = settings.chat_labels.get(row["chat_id"], row["chat_id"])
+            detail = f" · mensaje {row['message_id']}" if row["message_id"] is not None else ""
+            if row["error_type"]:
+                detail += f" · {row['error_type']}"
+            lines.append(f"#{row['id']} {label}: {STATUS_LABELS[row['status']]}{detail}")
+        return "\n".join(lines)
+
+    def _history_command(chat_id, arg):
+        parts = arg.split()
+        if parts and parts[0] == "item":
+            if len(parts) != 2:
+                raise ValueError("Uso: /historial item ID_DE_EMBY")
+            targets = list(dict.fromkeys(settings.chat_ids + settings.library_chat_ids + settings.playback_chat_ids + settings.admin_chat_ids))
+            lines = [f"Estado de Emby ID {parts[1]}:"]
+            for target in targets:
+                label = settings.chat_labels.get(target, target)
+                lines.append(f"{label}: {STATUS_LABELS[store.item_status(parts[1], target)]}")
+            lines.append("Sin registro significa historial desconocido; no demuestra que nunca se enviara.")
+        else:
+            if len(parts) > 2:
+                raise ValueError("Uso: /historial [pagina] [enviado|fallido|pendiente|incierto]")
+            page = int(parts[0]) if parts else 1
+            status = None
+            if len(parts) == 2:
+                status = next((k for k, v in STATUS_LABELS.items() if v == parts[1]), parts[1])
+            rows, total = store.history(page, status)
+            pages = max(1, (total + 4) // 5)
+            lines = [f"Historial · pagina {page}/{pages} · {total} entregas"]
+            for row in rows:
+                label = settings.chat_labels.get(row["chat_id"], row["chat_id"])[:60]
+                lines.append(f"#{row['id']} {row['title'][:80]} · {label} · {STATUS_LABELS[row['status']]} · {row['source']} · intentos {row['attempt_count']}")
+                lines.append(f"  {row['updated_at']} · Emby {row['item_id']} · mensaje {row['message_id'] or '-'} · {row['error_type'] or '-'}")
+            if not rows:
+                lines.append("Sin registros en esta pagina.")
+            if page < pages:
+                lines.append(f"Siguiente: /historial {page + 1}" + (f" {status}" if status else ""))
+            lines.extend(["Reintentar: /reintentar NUMERO_ENTREGA", "Estado de un contenido: /historial item ID_DE_EMBY"])
+        telegram.send_text("\n".join(lines), chat_ids=[chat_id])
 
     def _is_authorized_chat(chat_id: str) -> bool:
         return chat_id in allowed_telegram_chats
@@ -268,21 +338,13 @@ def create_app(settings: Settings) -> Flask:
                 return chat_ids
         return []
 
-    def _send_item_notification(chat_id: str, item: dict[str, Any], target_chat_ids: list[str] | None = None) -> None:
+    def _send_item_notification(chat_id: str, item: dict[str, Any], target_chat_ids: list[str] | None = None,
+                                request_key: str | None = None):
         if not item:
             telegram.send_text("No he encontrado ese contenido en Emby.", chat_ids=[chat_id])
-            return
-        targets = target_chat_ids or [chat_id]
-        item_id = item.get("Id")
-        logging.info(
-            "Manual resend requested for item_id=%s type=%s name=%s target_chat_ids=%s",
-            item_id or "unknown",
-            item.get("Type") or "unknown",
-            item.get("Name") or "unknown",
-            ",".join(targets),
-        )
-        image = emby.get_item_image(item)
-        telegram.send(_build_resend_caption(item), image, chat_ids=targets)
+            return []
+        return publications.publish(item, _build_resend_caption(item), target_chat_ids or [chat_id],
+                                    request_key or uuid.uuid4().hex, "manual", chat_id)
 
     def _series_seasons_with_episodes(series_id: str) -> list[dict[str, Any]]:
         seasons = emby.get_series_seasons(series_id)
@@ -387,6 +449,10 @@ def create_app(settings: Settings) -> Flask:
                     "- /reenviar: elegir entre contenido reciente y reenviarlo.",
                     "- /reenviaultimo: reenviar el ultimo contenido anadido.",
                     "- /reenvia ID_DE_EMBY: reenviar una ficha concreta.",
+                    "- /historial [pagina] [estado]: consultar entregas.",
+                    "- /historial item ID: estado por destino, incluido desconocido.",
+                    "- /reintentar NUMERO: solo la entrega pendiente o fallida.",
+                    "- /reintentar NUMERO confirmar-incierto: acepta posible duplicado.",
                     "- /diagnostico: validar Emby, Telegram y destinos.",
                     "- /version: ver version desplegada.",
                     "- /reload_menu: recargar comandos del menu de Telegram.",
@@ -476,6 +542,29 @@ def create_app(settings: Settings) -> Flask:
 
         command, _, arg = text.partition(" ")
         command = command.split("@", 1)[0].lower()
+        if command in {"/historial", "/reintentar"}:
+            # Unlike legacy menus, history never falls back to CHAT_IDS as admins.
+            if not is_private_chat or chat_id not in settings.admin_chat_ids:
+                telegram.send_text("Solo administradores configurados en privado.", chat_ids=[chat_id])
+                return
+            try:
+                if command == "/historial":
+                    _history_command(chat_id, arg)
+                else:
+                    parts = arg.split()
+                    if not parts or len(parts) > 2 or (len(parts) == 2 and parts[1] != "confirmar-incierto"):
+                        raise ValueError("Uso: /reintentar NUMERO_ENTREGA [confirmar-incierto]")
+                    delivery_id = int(parts[0])
+                    row = store.get(delivery_id)
+                    if row["chat_id"] not in allowed_telegram_chats:
+                        raise ValueError("Destino ya no configurado; revisa la configuracion antes de reenviar.")
+                    action = request.environ["delivery_action_key"]
+                    row = publications.retry(delivery_id, f"retry:{chat_id}:{action}", allow_uncertain=len(parts) == 2)
+                    telegram.send_text(_delivery_summary([row]), chat_ids=[chat_id])
+            except (ValueError, DecisionRequired) as exc:
+                telegram.send_text(str(exc), chat_ids=[chat_id])
+            return
+
         is_private_menu_command = is_private_chat and command in {"/start", "/menu", "/help", "/version"}
         is_private_search_command = is_private_chat and command == "/buscar"
         is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
@@ -678,8 +767,10 @@ def create_app(settings: Settings) -> Flask:
             if not item:
                 telegram.send_text("No he encontrado ese contenido en Emby.", chat_ids=[chat_id])
                 return
-            _send_item_notification(chat_id, item, target_chat_ids=target_chat_ids)
-            telegram.send_text(f"Reenviado a: {', '.join(target_chat_ids)}", chat_ids=[chat_id])
+            selection_id = str(message.get("message_id") or callback_id or request.environ["delivery_action_key"])
+            key = f"manual:{server_key}:{chat_id}:{selection_id}:{target_key}:{item_id}"
+            rows = _send_item_notification(chat_id, item, target_chat_ids=target_chat_ids, request_key=key)
+            telegram.send_text(_delivery_summary(rows), chat_ids=[chat_id])
             return
 
         if callback_data == "search:start":
@@ -744,17 +835,15 @@ def create_app(settings: Settings) -> Flask:
                 timezone_name=settings.app_timezone,
             )
             if activity_caption:
-                activity_image = (
-                    emby.get_item_image(activity_item)
-                    if activity_item and settings.playback_with_image
-                    else None
-                )
-                telegram.send(activity_caption, activity_image, chat_ids=playback_targets)
-                logging.info("Playback notification sent to %s", ",".join(playback_targets))
+                # Playback is recorded as a separate operation, never confused with library delivery.
+                playback_service = publications if settings.playback_with_image else PublicationService(store, telegram, lambda item: None)
+                playback_service.publish(activity_item, activity_caption, playback_targets,
+                                         f"playback:{uuid.uuid4().hex}", "playback")
                 return "", 200
             logging.info("Activity event produced no caption normalized_event=%s", event_code or "unknown")
         elif is_activity_payload(payload):
             logging.info("Playback notifications disabled; skipping activity event")
+            return "", 200
 
         item = payload.get("Item") or {}
         item_id = item.get("Id") or payload.get("ItemId")
@@ -777,12 +866,12 @@ def create_app(settings: Settings) -> Flask:
             item = _refresh_library_item(item, item_id)
 
             if item.get("Type") == "Episode":
+                publications.prepare(item, _episode_caption([item]), library_targets, _automatic_key(item), "automatic")
                 aggregator.add_episode(item)
                 return "", 200
 
             caption = build_caption(item)
-            image = emby.get_item_image(item)
-            telegram.send(caption, image, chat_ids=library_targets)
+            publications.publish(item, caption, library_targets, _automatic_key(item), "automatic")
             return "", 200
 
         logging.info("Ignored non-media event: %s", payload.get("Event") or "unknown")
@@ -797,6 +886,9 @@ def create_app(settings: Settings) -> Flask:
                 return "", 403
 
         payload = request.get_json(silent=True) or {}
+        update_id = payload.get("update_id")
+        message_data = payload.get("message") or {}
+        request.environ["delivery_action_key"] = str(update_id if update_id is not None else message_data.get("message_id") or uuid.uuid4().hex)
         message = payload.get("message") if isinstance(payload.get("message"), dict) else None
         callback_query = (
             payload.get("callback_query") if isinstance(payload.get("callback_query"), dict) else None
@@ -811,4 +903,15 @@ def create_app(settings: Settings) -> Flask:
 
         return "", 200
 
+    if panel is not None:
+        from .web_manager import register_manager, EmbyCatalog
+        if not panel.get("secret_key") or len(panel["secret_key"]) < 32:
+            raise ValueError("Panel requires a separate secret_key of at least 32 characters")
+        app.secret_key = panel["secret_key"]
+        app.config["SESSION_COOKIE_SECURE"] = True
+        register_manager(app, store, publications, EmbyCatalog(emby),
+                         [dict(id=c, label=settings.chat_labels.get(c, c), kind="channel")
+                          for c in dict.fromkeys(settings.library_chat_ids or settings.chat_ids)],
+                         password=panel.get("password", ""), mode="operational",
+                         allow_sends=panel.get("allow_sends") is True)
     return app
