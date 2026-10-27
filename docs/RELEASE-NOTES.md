@@ -14,12 +14,14 @@ Revisión derivada de `main` (`977fcfd`) para añadir recuperación individual s
 
 Validación local de esta revisión:
 
-- **335 pruebas Python aprobadas** y 6 omitidas. Las omitidas son pruebas preexistentes del cliente Telegram (cuatro casos de error individual, cierre del SDK y respuesta vacía) cuyo bucle `asyncio` es interceptado por el bloqueo de sockets en Windows/Python 3.13; ninguna prueba nueva fue omitida.
+- **336 pruebas Python aprobadas** y 6 omitidas. Las omitidas son pruebas preexistentes del cliente Telegram (cuatro casos de error individual, cierre del SDK y respuesta vacía) cuyo bucle `asyncio` es interceptado por el bloqueo de sockets en Windows/Python 3.13; ninguna prueba nueva fue omitida.
 - Las pruebas nuevas cubren enviado, pendiente, fallido, incierto, desconocido, rechazo directo de `Series` y otros tipos, asociación contenido/destino, revalidación de planes obsoletos, CSRF/autenticación, envíos desactivados, caducidad, repetición, confirmación concurrente y reinicio durante una operación.
 - Compilación Python, sintaxis de todos los módulos JavaScript y comprobación de espacios del diff aprobadas.
 - Los tres YAML de Compose se analizaron correctamente y se verificó `PANEL_ALLOW_SENDS=false`.
 - Docker no está instalado en este equipo: no se ejecutaron `docker compose config`, builds ni contenedores.
 - `playwright-core` y Chromium no están disponibles: se añadió el recorrido de navegador de recuperación individual, pero no se ejecutó localmente.
+
+Corrección de interfaz posterior: la selección y vista previa individuales usan `/api/artwork/<id>` con fallback visual; la vista oculta la bandeja masiva, mantiene sus manejadores separados y destaca el bloqueo de `PANEL_ALLOW_SENDS=false`. La regresión confirma que, al habilitar envíos, `PublicationService` entrega al cliente Telegram simulado la imagen y el texto congelado una sola vez. El recorrido Chromium cubre también estos comportamientos, aunque sigue sin poder ejecutarse en este equipo por falta de navegador y `playwright-core`.
 
 Toda la suite usa dobles locales y bloqueo de red; no se publicaron mensajes reales ni se usaron credenciales reales.
 

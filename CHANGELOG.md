@@ -17,6 +17,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). E
 - No cambia el esquema SQLite (`PRAGMA user_version=1`), los destinatarios, el formato de mensaje, los webhooks, puertos ni el valor seguro `PANEL_ALLOW_SENDS=false`.
 - Imágenes de producción y demostración actualizadas a `0.5.3`.
 
+### Corregido
+
+- La recuperación individual muestra la carátula real en selección y vista previa, con placeholder si Emby no devuelve imagen.
+- Su confirmación permanece aislada de la selección y bandeja del envío masivo, y el bloqueo `PANEL_ALLOW_SENDS=false` se presenta de forma destacada.
+
 ## [0.5.2] — EMBY-005 (propuesta, sin despliegue)
 
 ### Añadido

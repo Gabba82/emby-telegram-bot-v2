@@ -76,15 +76,28 @@ function check(name, ok, detail) { results.push({ name, ok: !!ok, detail }); con
   await shot(page, '03-biblioteca-escritorio');
 
   // Recuperación individual: 1 contenido × 1 destino, enviado protegido y riesgo explícito.
+  const individualRequests = [];
+  const trackIndividual = r => {
+    const u = new URL(r.url());
+    if (r.method() === 'POST' && (u.pathname === '/api/prepare' || u.pathname === '/api/individual-recovery/prepare' || /\/api\/batches\/[^/]+\/confirm$/.test(u.pathname))) individualRequests.push(u.pathname);
+  };
+  page.on('request', trackIndividual);
   await page.click('[data-view="individual"]');
   await page.waitForSelector('#individual-form');
   await page.selectOption('[data-action="individual-item"]', 'm1');
+  await page.waitForFunction(() => { const i=document.querySelector('.individual-pick .cover__img'); return i && i.complete && i.naturalWidth > 0; });
+  check('selección individual muestra la carátula real de Emby', (await page.getAttribute('.individual-pick .cover__img','src')) === '/api/artwork/m1');
   await page.selectOption('[data-action="individual-chat"]', 'demo-cine');
   await page.click('[data-action="individual-prepare"]');
   await page.waitForSelector('.panel h3:has-text("Estado actual")');
+  await page.waitForFunction(() => { const i=document.querySelector('.tg__cover .cover__img'); return i && i.complete && i.naturalWidth > 0; });
+  check('vista previa individual incluye la carátula real', (await page.getAttribute('.tg__cover .cover__img','src')) === '/api/artwork/m1');
   check('recuperación individual muestra el estado enviado', /Enviado/.test(await text(page, '#view')));
   check('lo ya enviado no ofrece confirmación individual', (await page.locator('[data-action="individual-confirm"]').count()) === 0);
+  await page.route('**/api/artwork/m4', r => r.fulfill({status:404,body:''}));
   await page.selectOption('[data-action="individual-item"]', 'm4');
+  await page.waitForFunction(() => document.querySelector('.individual-pick .cover') && !document.querySelector('.individual-pick .cover__img'));
+  check('carátula ausente conserva el fallback visual con el título', (await page.locator('.individual-pick .cover__ph').count()) === 1);
   await page.click('[data-action="individual-prepare"]');
   await page.waitForSelector('[data-action="individual-decision"][data-value="send"]');
   check('historial desconocido exige decisión explícita', /Decisión explícita necesaria/.test(await text(page, '#view')));
@@ -92,6 +105,13 @@ function check(name, ok, detail) { results.push({ name, ok: !!ok, detail }); con
   await page.waitForSelector('[data-action="individual-ack"]');
   await page.check('[data-action="individual-ack"]');
   check('la confirmación individual queda preparada sin ejecutarse', await page.locator('[data-action="individual-confirm"]').isEnabled());
+  await page.click('[data-action="individual-confirm"]');
+  await page.waitForSelector('.panel h3:has-text("Resultado consultable")');
+  check('confirmar permanece en Recuperación individual', (await page.getAttribute('#nav [data-view="individual"]','aria-current')) === 'page' && /Recuperación individual/.test(await text(page,'#view h2')));
+  check('confirmar no crea ni muestra un lote masivo', (await page.locator('#tray .tray').count()) === 0 && !individualRequests.includes('/api/prepare'));
+  check('confirmar usa solo el endpoint individual y el motor de lotes existente', individualRequests.filter(p => p === '/api/individual-recovery/prepare').length >= 2 && individualRequests.some(p => /\/confirm$/.test(p)));
+  page.off('request',trackIndividual);
+  await page.unroute('**/api/artwork/m4');
   await page.click('[data-view="library"]');
   await page.waitForSelector('.grid .card');
 
@@ -337,6 +357,33 @@ function check(name, ok, detail) { results.push({ name, ok: !!ok, detail }); con
   check('confirm devuelve executing: tampoco se da por terminado', (await page.locator('[data-action="new-batch"]').count()) === 0);
   await page.unroute('**/api/batches/*/confirm');
   await shot(page, '12-confirmacion-en-curso');
+  await page.context().close();
+
+  // ===== Bloqueo visible con PANEL_ALLOW_SENDS=false =====
+  page = await newPage(1280,800);
+  const sendsDisabled = async route => {
+    const response=await route.fetch();
+    const body=await response.json();
+    body.sends_enabled=false;
+    await route.fulfill({response,json:body});
+  };
+  await page.route('**/api/session',sendsDisabled);
+  await page.route('**/api/login',sendsDisabled);
+  await page.goto(BASE+'/manager/');
+  await page.waitForSelector('#login-form');
+  await login(page,PASSWORD);
+  await page.waitForSelector('.grid .card');
+  await page.click('[data-view="individual"]');
+  await page.waitForSelector('.individual-send-lock');
+  check('PANEL_ALLOW_SENDS=false se muestra como bloqueo destacado', /PANEL_ALLOW_SENDS=false/.test(await text(page,'.individual-send-lock')) && /no confirmarla/i.test(await text(page,'.individual-send-lock')));
+  await page.selectOption('[data-action="individual-item"]','m5');
+  await page.selectOption('[data-action="individual-chat"]','demo-cine');
+  await page.click('[data-action="individual-prepare"]');
+  await page.waitForSelector('[data-action="individual-decision"][data-value="send"]');
+  await page.click('[data-action="individual-decision"][data-value="send"]');
+  await page.waitForSelector('[data-action="individual-confirm"]');
+  await page.check('[data-action="individual-ack"]');
+  check('confirmación individual permanece deshabilitada con envíos bloqueados', await page.locator('[data-action="individual-confirm"]').isDisabled());
   await page.context().close();
 
   // ===== Móvil 390 =====

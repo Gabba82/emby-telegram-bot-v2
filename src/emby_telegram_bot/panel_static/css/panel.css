@@ -176,6 +176,7 @@ main:focus, h2:focus { outline: none; }
 .cover--xs { width: 40px; flex: none; border-radius: 6px; }
 .cover--xs .cover__ph { display: none; }
 .cover--lg { max-width: 240px; margin: 0 auto; }
+.cover--individual { width: 72px; flex: none; }
 .ph-0 { --p1: #3b2a14; --p2: #15110b; } .ph-1 { --p1: #2a3040; --p2: #12141a; } .ph-2 { --p1: #3a2224; --p2: #170f10; } .ph-3 { --p1: #1f3a35; --p2: #0f1a18; }
 .ph-4 { --p1: #3a3320; --p2: #181509; } .ph-5 { --p1: #2f2a44; --p2: #14111c; } .ph-6 { --p1: #40301f; --p2: #1a120a; } .ph-7 { --p1: #25363f; --p2: #101a1f; }
 
@@ -258,6 +259,10 @@ main:focus, h2:focus { outline: none; }
 .alert--ok { border-color: #3d6b46; background: rgba(127, 214, 143, .07); }
 .checkline { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
 .checkline input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.individual-pick { display: flex; gap: 12px; align-items: center; padding: 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; }
+.individual-pick > div { min-width: 0; }
+.individual-pick p { margin-top: 3px; }
+.individual-send-lock code { color: var(--text); }
 .alert--info { border-color: #4a5a78; background: rgba(134, 197, 255, .07); }
 .alert .btn-row { margin-top: 4px; }
 
