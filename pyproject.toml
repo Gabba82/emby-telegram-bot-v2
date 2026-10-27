@@ -4,9 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "emby-telegram-bot-v2"
-version = "0.1.0"
-description = "Webhook service to publish Emby updates to Telegram"
+version = "0.5.0"
+description = "Webhook service to publish Emby updates to Telegram, with an optional reconciliation panel"
+readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
   "Flask==3.1.0",
   "gunicorn==23.0.0",
@@ -14,8 +16,27 @@ dependencies = [
   "requests==2.32.3"
 ]
 
+[project.optional-dependencies]
+dev = ["pytest==8.3.5"]
+
+[project.scripts]
+emby-telegram-bot = "emby_telegram_bot.main:run"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Static panel assets ship inside the wheel so the image does not depend on the
+# build context at runtime (web_manager serves them from panel_static/).
+[tool.setuptools.package-data]
+emby_telegram_bot = [
+  "panel_static/*.html",
+  "panel_static/css/*.css",
+  "panel_static/js/*.js",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

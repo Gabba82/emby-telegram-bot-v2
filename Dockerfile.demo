@@ -1,0 +1,43 @@
+# EMBY-005 — imagen de demostracion (perfil Compose `demo`).
+#
+# Misma postura que la imagen de produccion: usuario no privilegiado, sin secretos,
+# sin .env. La diferencia es la entrada: ejecuta la aplicacion de DEMOSTRACION
+# (create_demo_app), que sirve catalogo y ledger sinteticos y bloquea las conexiones
+# salientes dentro del propio proceso (scripts/run_manager.py).
+#
+# Nota: run_manager.py NO lee .env ni valida credenciales; el aislamiento lo da
+# Compose (env_file vacio + network_mode: none en el smoke). Esta imagen no registra
+# comandos de Telegram ni contacta con Emby.
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    APP_VERSION=0.5.0-smoke \
+    APP_UID=10001 \
+    APP_GID=10001
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid "$APP_GID" app \
+    && useradd --uid "$APP_UID" --gid "$APP_GID" --no-create-home --shell /usr/sbin/nologin app
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY scripts/run_manager.py ./scripts/run_manager.py
+
+RUN pip install --no-cache-dir . \
+    && mkdir -p /data \
+    && chown -R "$APP_UID":"$APP_GID" /data /app
+
+USER "$APP_UID"
+EXPOSE 8093
+
+CMD ["python", "scripts/run_manager.py", "--host", "0.0.0.0", "--port", "8093", "--db", "/data/demo.sqlite3"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS "http://127.0.0.1:8093/health" || exit 1

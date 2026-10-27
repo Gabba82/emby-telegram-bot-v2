@@ -4,11 +4,13 @@ import asyncio
 import html
 import io
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from telegram import Bot, BotCommand, BotCommandScopeChat, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
+from telegram.error import BadRequest, Forbidden, InvalidToken, RetryAfter, ChatMigrated
 
 from .formatting import EXPANDABLE_SECTION_END, EXPANDABLE_SECTION_START
 
@@ -52,21 +54,35 @@ def format_caption_for_telegram(caption: str) -> tuple[str, str]:
     return safe_markdown_v2(caption), ParseMode.MARKDOWN_V2
 
 
+@dataclass(frozen=True)
+class SendResult:
+    chat_id: str
+    status: str
+    message_id: int | None = None
+    error_type: str | None = None
+
+
+def error_result(chat_id: str, exc: Exception) -> SendResult:
+    # A server rejection is known not delivered; ambiguous failures stay uncertain.
+    status = "failed" if isinstance(exc, (BadRequest, Forbidden, InvalidToken, RetryAfter, ChatMigrated)) else "uncertain"
+    return SendResult(chat_id, status, error_type=type(exc).__name__)
+
+
 class TelegramClient:
     def __init__(self, token: str, chat_ids: list[str]) -> None:
         self._token = token
         self._chat_ids = chat_ids
 
-    def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> None:
-        formatted_caption, parse_mode = format_caption_for_telegram(caption)
-        targets = chat_ids or self._chat_ids
+    def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> list[SendResult]:
+        targets = list(dict.fromkeys(chat_ids if chat_ids is not None else self._chat_ids))
         if not targets:
-            logging.warning("Telegram send skipped because no target chat IDs were provided")
-            return
+            return []
         try:
-            asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets))
+            formatted_caption, parse_mode = format_caption_for_telegram(caption)
+            return asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets))
         except Exception as exc:
-            logging.error("Telegram batch send failed error_type=%s error=%s", type(exc).__name__, exc)
+            logging.error("Telegram batch send failed error_type=%s", type(exc).__name__)
+            return [error_result(chat_id, exc) for chat_id in targets]
 
     def validate_credentials(self) -> str:
         try:
@@ -185,7 +201,11 @@ class TelegramClient:
             return
 
         keyboard = InlineKeyboardMarkup(buttons)
-        self.send_text(f"Destino para reenviar '{item_name}':", chat_ids=[chat_id], reply_markup=keyboard)
+        self.send_text(
+            f"Destino para publicar de nuevo '{item_name}':\nPuede duplicar una publicacion anterior. "
+            "Para recuperar una entrega usa /reintentar NUMERO (ver /historial).",
+            chat_ids=[chat_id], reply_markup=keyboard,
+        )
 
     def send_search_admin_actions(self, chat_id: str, item_id: str) -> None:
         keyboard = InlineKeyboardMarkup(
@@ -229,36 +249,32 @@ class TelegramClient:
         except Exception as exc:
             logging.error("Telegram callback answer failed error=%s", exc)
 
-    async def _send_all(
-        self,
-        formatted_caption: str,
-        parse_mode: str,
-        image_bytes: bytes | None,
-        targets: list[str],
-    ) -> None:
-        async with Bot(token=self._token) as bot:
-            for chat_id in targets:
-                try:
-                    if image_bytes:
-                        await bot.send_photo(
-                            chat_id=chat_id,
-                            photo=io.BytesIO(image_bytes),
-                            caption=formatted_caption,
-                            parse_mode=parse_mode,
-                        )
-                    else:
-                        await bot.send_message(
-                            chat_id=chat_id,
-                            text=formatted_caption,
-                            parse_mode=parse_mode,
-                        )
-                except Exception as exc:
-                    logging.error(
-                        "Telegram send failed for chat_id=%s error_type=%s error=%s",
-                        chat_id,
-                        type(exc).__name__,
-                        exc,
-                    )
+    async def _send_all(self, formatted_caption: str, parse_mode: str,
+                        image_bytes: bytes | None, targets: list[str]) -> list[SendResult]:
+        results = []
+        try:
+            async with Bot(token=self._token) as bot:
+                for chat_id in targets:
+                    try:
+                        if image_bytes:
+                            message = await bot.send_photo(chat_id=chat_id, photo=io.BytesIO(image_bytes),
+                                                           caption=formatted_caption, parse_mode=parse_mode)
+                        else:
+                            message = await bot.send_message(chat_id=chat_id, text=formatted_caption,
+                                                             parse_mode=parse_mode)
+                        if getattr(message, "message_id", None) is None:
+                            results.append(SendResult(chat_id, "uncertain", error_type="MissingMessageId"))
+                        else:
+                            results.append(SendResult(chat_id, "sent", message_id=message.message_id))
+                    except Exception as exc:
+                        results.append(error_result(chat_id, exc))
+                        logging.error("Telegram send failed chat_id=%s error_type=%s", chat_id, type(exc).__name__)
+        except Exception as exc:
+            # Preserve earlier accepted messages even if SDK setup/shutdown fails.
+            completed = {r.chat_id for r in results}
+            results.extend(error_result(cid, exc) for cid in targets if cid not in completed)
+            logging.error("Telegram transport failed error_type=%s", type(exc).__name__)
+        return results
 
     async def _send_text_all(
         self,
@@ -305,6 +321,8 @@ class TelegramClient:
             BotCommand("reenviar", "Reenviar contenido reciente"),
             BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
             BotCommand("reenvia", "Reenviar por ID de Emby"),
+            BotCommand("historial", "Historial persistente de entregas"),
+            BotCommand("reintentar", "Reintentar una entrega por su numero"),
             BotCommand("diagnostico", "Validar configuracion"),
             BotCommand("version", "Ver version desplegada"),
             BotCommand("reload_menu", "Recargar menu de comandos"),

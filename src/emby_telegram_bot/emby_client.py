@@ -20,6 +20,16 @@ class EmbyClient:
         response.raise_for_status()
         return response
 
+    def get_library_page(self, *, start_index, limit, library_id=None, item_types=('Movie','Episode')):
+        params=dict(StartIndex=start_index,Limit=limit,Recursive='true',IncludeItemTypes=','.join(item_types),EnableTotalRecordCount='true',SortBy='SortName',SortOrder='Ascending',Fields='DateCreated,SeriesInfo,ParentId,Overview,ProductionYear')
+        if library_id:params['ParentId']=library_id
+        return self._get('Items',params=params).json()
+
+    def get_libraries(self):
+        payload=self._get('Library/MediaFolders').json()
+        if not isinstance(payload,dict) or not isinstance(payload.get('Items'),list):raise ValueError('Invalid library response')
+        return [dict(id=str(v['Id']),label=str(v.get('Name','Biblioteca'))) for v in payload['Items'] if isinstance(v,dict) and v.get('Id')]
+
     def validate_credentials(self) -> str:
         payload = self._get("System/Info").json()
         server_name = payload.get("ServerName") or payload.get("LocalAddress") or "Emby"

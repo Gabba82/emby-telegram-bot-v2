@@ -1,0 +1,12 @@
+# EMBY-005 — demo usable en local (perfil `demo`).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml --profile demo up -d
+#
+# Publica el puerto SOLO en 127.0.0.1: la demo no debe quedar expuesta en todas las
+# interfaces del host. La contrasena de la demo es la publica de siempre
+# (emby-demo-003): es un entorno sintetico sin credenciales reales.
+
+services:
+  demo:
+    ports:
+      - "127.0.0.1:${DEMO_PORT:-8093}:8093"

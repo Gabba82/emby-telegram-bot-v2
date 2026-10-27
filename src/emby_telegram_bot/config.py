@@ -46,6 +46,8 @@ class Settings:
     telegram_webhook_secret: str
     chat_labels: dict[str, str] = field(default_factory=dict)
 
+    history_db_path: str = "data/history.sqlite3"
+
     @classmethod
     def from_env(cls) -> "Settings":
         telegram_token = os.getenv("TELEGRAM_TOKEN", "").strip()
@@ -60,6 +62,10 @@ class Settings:
         app_timezone = os.getenv("APP_TIMEZONE", "Europe/Madrid").strip()
         telegram_webhook_secret = os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
         chat_labels = _parse_chat_labels(os.getenv("CHAT_LABELS", ""))
+
+        history_db_path = os.getenv("HISTORY_DB_PATH", "data/history.sqlite3").strip()
+        if not history_db_path or history_db_path == ":memory:":
+            raise ValueError("HISTORY_DB_PATH must name a persistent SQLite file")
 
         timeout_raw = os.getenv("REQUEST_TIMEOUT_SECONDS", "15").strip()
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
@@ -124,4 +130,5 @@ class Settings:
             app_timezone=app_timezone,
             telegram_webhook_secret=telegram_webhook_secret,
             chat_labels=chat_labels,
+            history_db_path=history_db_path,
         )

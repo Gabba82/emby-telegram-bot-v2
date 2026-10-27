@@ -1,0 +1,44 @@
+# Secrets and local state must never reach the build context.
+.env
+.env.*
+!.env.example
+
+# Python caches and build artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local test and runtime scratch
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
+
+# VCS and editor noise
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+*.swp
+
+# Docs/screenshots are not needed to build the image (keeps the context small)
+docs/screenshots/
+tests/panel-browser.cjs
+tests/reconciliation-browser.cjs
+
+# Local environments and private backup files
+.venv/
+venv/
+backups/
+*.sqlite
+*.db
