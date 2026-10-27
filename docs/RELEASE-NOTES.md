@@ -1,6 +1,22 @@
-# Notas de la versión — EMBY-005 (0.5.1, propuesta)
+# Notas de la versión — EMBY-005 (0.5.2, propuesta)
 
-Revisión derivada de `main` (`dc22118`) para corregir la selección de bibliotecas de conciliación. La versión `0.5.1` es una **propuesta**: no hay etiqueta ni release publicados, y la rama no se ha desplegado en producción.
+Revisión derivada de `main` (`b2e2086`) para mejorar los destinos del panel. La versión `0.5.2` es una **propuesta**: no hay etiqueta ni release publicados, la PR no se fusiona automáticamente y no se despliega en Monster.
+
+## Cambios 0.5.2
+
+- Los destinos del panel se enriquecen con su nombre real de Telegram mediante el mismo `getChat` usado por el diagnóstico.
+- Los nombres correctos se cachean en memoria y en SQLite; ante un fallo se usa el último nombre conocido o el ID.
+- Cada chat admite un alias opcional de presentación. `CHAT_LABELS` lo inicializa sin sobrescribir cambios ya persistidos.
+- Selectores, filtros, conciliación e historial conservan el ID real como clave y muestran nombres legibles con el ID como contexto.
+- `docker-compose.yml`, `Dockerfile`, `Dockerfile.demo` y el paquete pasan a `0.5.2`.
+- No cambian credenciales, webhooks, puertos, destinatarios, lógica de envío, entregas SQLite ni `PANEL_ALLOW_SENDS=false`.
+
+Validación local de la revisión:
+
+- **316 pruebas Python aprobadas**; 6 pruebas preexistentes del cliente Telegram se excluyeron porque el bloqueo de red intercepta sockets internos de `asyncio` en Windows/Python 3.13.
+- Sintaxis de todos los módulos JavaScript y compilación Python aprobadas.
+- Los tres YAML de Compose se analizaron correctamente y se comprobaron las etiquetas, argumentos de build y `PANEL_ALLOW_SENDS=false`. Docker no está instalado en este equipo, por lo que no se pudo ejecutar `docker compose config` ni construir imágenes.
+- Las pruebas de navegador no se ejecutaron porque este equipo no dispone de `playwright-core` ni Chromium.
 
 ## Corrección 0.5.1
 

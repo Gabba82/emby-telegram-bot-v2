@@ -110,6 +110,7 @@
     login: function (password) { return request('POST', '/login', { password: password }).then(session); },
     logout: function () { return request('POST', '/logout', {}).then(session); },
     chats: function () { return request('GET', '/chats').then(function (d) { return expectArray(d, 'chats'); }); },
+    setChatAlias: function (id, alias) { return request('POST', '/chats/' + encodeURIComponent(id) + '/alias', { alias: alias }); },
     catalog: function (p) { return request('GET', '/catalog' + qs(p)).then(function (d) { return expectArray(d, 'items'); }); },
     history: function (p) { return request('GET', '/history' + qs(p)).then(function (d) { return expectArray(d, 'items'); }); },
     delivery: function (id) { return request('GET', '/deliveries/' + encodeURIComponent(id)).then(function (d) { return expectArray(d, 'attempts'); }); },

@@ -116,7 +116,7 @@ Ejemplo completo en `.env.example`. Variables principales:
 | `CHAT_IDS` | Chats de destino separados por coma (obligatoria) |
 | `ADMIN_CHAT_IDS` | IDs privados con permisos de administración. Los comandos `/historial` y `/reintentar` **no** recurren a `CHAT_IDS` si está vacía |
 | `LIBRARY_CHAT_IDS`, `PLAYBACK_CHAT_IDS` | Destinos específicos de biblioteca y reproducción (si están vacíos, `CHAT_IDS`) |
-| `CHAT_LABELS` | Nombres amigables, p. ej. `chat:Canal novedades,-100123:Grupo familia` |
+| `CHAT_LABELS` | Alias iniciales opcionales, p. ej. `chat:Canal novedades,-100123:Grupo familia`; el panel conserva después los cambios en SQLite |
 | `EMBY_API_URL`, `EMBY_API_KEY` | Acceso a Emby (obligatoria la clave) |
 | `REQUEST_TIMEOUT_SECONDS`, `EPISODE_BUFFER_SECONDS` | Tiempos de espera y de agrupación (> 0) |
 | `LIBRARY_DEBOUNCE_SECONDS`, `PLAYBACK_DEBOUNCE_SECONDS` | Ventanas anti-duplicado (≥ 0) |

@@ -102,6 +102,10 @@
       case 'toggle-item': store.toggleItem(id, el.getAttribute('data-on') === 'true'); break;
       case 'all-chats': store.setAllChats(true); break;
       case 'no-chats': store.setAllChats(false); break;
+      case 'save-chat-alias':
+        var aliasInput = el.closest('.dest').querySelector('[data-chat-alias]');
+        store.saveChatAlias(id, aliasInput ? aliasInput.value : '');
+        break;
       case 'toggle-detail': store.toggleDetail(id); break;
       case 'prepare-recovery': store.prepareRecovery(store.state.history.f.chat); break;
       case 'preview-step': store.setPreviewIndex(store.state.previewIndex + parseInt(id, 10)); break;

@@ -4,6 +4,7 @@ import asyncio
 import html
 import io
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -72,6 +73,8 @@ class TelegramClient:
     def __init__(self, token: str, chat_ids: list[str]) -> None:
         self._token = token
         self._chat_ids = chat_ids
+        self._chat_labels: dict[str, str] = {}
+        self._chat_label_failures: dict[str, tuple[float, Exception]] = {}
 
     def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> list[SendResult]:
         targets = list(dict.fromkeys(chat_ids if chat_ids is not None else self._chat_ids))
@@ -92,9 +95,18 @@ class TelegramClient:
             raise
 
     def validate_chat(self, chat_id: str) -> str:
+        if chat_id in self._chat_labels:
+            return self._chat_labels[chat_id]
+        failed = self._chat_label_failures.get(chat_id)
+        if failed and time.monotonic() - failed[0] < 60:
+            raise RuntimeError("Telegram chat lookup recently failed") from failed[1]
         try:
-            return asyncio.run(self._get_chat_label(chat_id))
+            label = asyncio.run(self._get_chat_label(chat_id))
+            self._chat_labels[chat_id] = label
+            self._chat_label_failures.pop(chat_id, None)
+            return label
         except Exception as exc:
+            self._chat_label_failures[chat_id] = (time.monotonic(), exc)
             logging.error(
                 "Telegram chat validation failed chat_id=%s error_type=%s error=%s",
                 chat_id,
