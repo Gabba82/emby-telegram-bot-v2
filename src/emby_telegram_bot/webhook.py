@@ -904,14 +904,19 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         return "", 200
 
     if panel is not None:
+        from .chat_directory import ChatDirectory
         from .web_manager import register_manager, EmbyCatalog
         if not panel.get("secret_key") or len(panel["secret_key"]) < 32:
             raise ValueError("Panel requires a separate secret_key of at least 32 characters")
         app.secret_key = panel["secret_key"]
         app.config["SESSION_COOKIE_SECURE"] = True
+        panel_chat_ids=list(dict.fromkeys(settings.library_chat_ids or settings.chat_ids))
+        chat_directory=ChatDirectory(store,telegram,panel_chat_ids,settings.chat_labels)
+        chat_directory.refresh_names()
+        app.extensions['chat_directory']=chat_directory
         register_manager(app, store, publications, EmbyCatalog(emby),
-                         [dict(id=c, label=settings.chat_labels.get(c, c), kind="channel")
-                          for c in dict.fromkeys(settings.library_chat_ids or settings.chat_ids)],
+                         chat_directory.list(),
                          password=panel.get("password", ""), mode="operational",
-                         allow_sends=panel.get("allow_sends") is True)
+                         allow_sends=panel.get("allow_sends") is True,
+                         chat_directory=chat_directory)
     return app

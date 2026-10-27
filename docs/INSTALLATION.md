@@ -111,7 +111,7 @@ La proteccion de `/embyhook` depende de la red y del proxy:
 
 | Ruta | Contenido | Persistencia |
 |---|---|---|
-| `/data/history.sqlite3` | ledger de entregas e historial | volumen del proyecto |
+| `/data/history.sqlite3` | ledger de entregas, historial y nombres/alias del panel | volumen del proyecto |
 | `/data/` | WAL/SHM junto a la base | mismo volumen |
 
 SQLite con `journal_mode=WAL`. El volumen es propiedad del UID 10001, asi que el
@@ -142,7 +142,7 @@ de rutas internas de Docker (`/var/lib/docker`) ni de montar el volumen a mano.
   ```
 - La restauracion conserva siempre la base vigente como
   `<backup>.pre-restore-<fecha>.sqlite3` antes de sobrescribir.
-- El backup **no** copia `.env` ni credenciales: solo el ledger.
+- El backup **no** copia `.env` ni credenciales: conserva el ledger y la configuración de presentación del panel guardada en SQLite.
 
 ## 8. Rollback
 

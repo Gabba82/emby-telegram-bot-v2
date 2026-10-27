@@ -2,6 +2,23 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.5.2] — EMBY-005 (propuesta, sin despliegue)
+
+### Añadido
+
+- Directorio de destinos del panel con nombres reales obtenidos mediante `getChat`, caché en memoria y persistencia en el SQLite existente.
+- Alias de presentación editables desde **Envío → Destinos**, compatibles con `CHAT_LABELS` y persistentes tras reiniciar.
+
+### Cambiado
+
+- Los selectores y filtros muestran alias o nombre Telegram junto al ID, manteniendo siempre el ID como valor interno.
+- Las imágenes Docker de producción y demostración usan la etiqueta y `APP_VERSION` `0.5.2`.
+
+### Seguridad y compatibilidad
+
+- Sin cambios en destinatarios, webhooks, puertos, credenciales, entregas o `PANEL_ALLOW_SENDS=false`.
+- Las tablas de presentación se añaden sin cambiar `PRAGMA user_version=1`, compatible con la base de v0.5.1.
+
 ## [0.5.1] — EMBY-005 (propuesta, sin etiqueta ni publicación)
 
 ### Corregido

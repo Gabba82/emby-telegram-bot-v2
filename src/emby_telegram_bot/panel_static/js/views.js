@@ -137,7 +137,7 @@
 
   function chatOptions(store, current, allLabel) {
     return '<option value="">' + esc(allLabel) + '</option>' + store.state.chats.list.map(function (c) {
-      return '<option value="' + esc(c.id) + '"' + (current === c.id ? ' selected' : '') + '>' + esc(c.label) + '</option>';
+      return '<option value="' + esc(c.id) + '"' + (current === c.id ? ' selected' : '') + '>' + esc(store.chatOptionLabel(c.id)) + '</option>';
     }).join('');
   }
   function statusOptions(current, allLabel) {
@@ -276,21 +276,25 @@
   function destinationsPanel(store) {
     var st = store.state, C = st.chats;
     var inner;
-    if (C.status === 'error') inner = errorBlock(C.error, 'chats', 'No se pudieron cargar los chats.');
+    if (C.status === 'error') inner = errorBlock(C.error, 'chats', 'No se pudieron cargar los chats. Se mantienen intactos los destinos configurados; vuelve a intentarlo.');
     else if (C.status !== 'ok') inner = spinner('Cargando destinos…');
+    else if (!C.list.length) inner = '<p class="empty">No hay destinos configurados para el panel. Revisa <code>LIBRARY_CHAT_IDS</code> o <code>CHAT_IDS</code>.</p>';
     else {
       var rows = st.plan.batch ? st.plan.batch.rows : [];
       var locked = !!st.scope;
       var listed = locked ? C.list.filter(function (c) { return st.selChats.indexOf(c.id) >= 0; }) : C.list;
       inner = '<fieldset class="dests"><legend class="sr-only">Destinos de envío</legend><ul>' + listed.map(function (c) {
         var on = st.selChats.indexOf(c.id) >= 0, full = locked || (!on && st.selChats.length >= store.MAX_CHATS);
+        var secondary = [c.telegram_name && c.telegram_name !== c.label ? c.telegram_name : '', c.id, chatKind(c.kind)].filter(Boolean).join(' · ');
         var counts = {};
         rows.forEach(function (r) { if (r.chat_id === c.id) counts[normStatus(r.state)] = (counts[normStatus(r.state)] || 0) + 1; });
         var chips = Object.keys(counts).map(function (s) {
           return '<li class="count s-' + s + '" title="' + esc(statusLabel(s)) + '">' + icon(s) + '<span aria-hidden="true">' + counts[s] + '</span><span class="sr-only">' + counts[s] + ' ' + esc(statusLabel(s)) + '</span></li>';
         }).join('');
         return '<li class="dest' + (on ? ' is-selected' : '') + '"><label class="dest__pick"><input type="checkbox" data-fid="chat-' + esc(c.id) + '" data-action="toggle-chat" data-id="' + esc(c.id) + '"' + (on ? ' checked' : '') + (full ? ' disabled' : '') + '>' +
-          '<span class="dest__main"><span class="dest__name">' + esc(c.label) + '</span><span class="muted small">' + esc(chatKind(c.kind)) + '</span></span></label>' +
+          '<span class="dest__main"><span class="dest__name">' + esc(c.label) + '</span><span class="muted small">' + esc(secondary) + '</span></span></label>' +
+          '<div class="dest__alias"><label class="field field--grow"><span>Alias opcional</span><input type="text" maxlength="80" data-chat-alias value="' + esc(c.alias || '') + '" placeholder="Usar nombre de Telegram"></label>' +
+          '<button type="button" class="btn btn--ghost btn--sm" data-action="save-chat-alias" data-id="' + esc(c.id) + '">Guardar alias</button></div>' +
           (on && chips ? '<ul class="counts" aria-label="Estado actual del lote en este chat">' + chips + '</ul>' : '') + '</li>';
       }).join('') + '</ul></fieldset>' +
         (locked ? '' : '<div class="btn-row"><button type="button" class="btn btn--ghost" data-action="all-chats">Todos</button><button type="button" class="btn btn--ghost" data-action="no-chats">Ninguno</button></div>');

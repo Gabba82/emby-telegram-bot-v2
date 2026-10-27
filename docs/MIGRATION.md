@@ -2,6 +2,8 @@
 
 EMBY-005 empaqueta el bot con Docker Compose y añade el panel como módulo **opcional**. El esquema SQLite del historial es compatible con EMBY-002/003/004. Instalación completa: [`INSTALLATION.md`](INSTALLATION.md).
 
+La actualización de `0.5.1` a `0.5.2` usa la misma base y mantiene `PRAGMA user_version=1`. Solo añade, mediante `CREATE TABLE IF NOT EXISTS`, el directorio de nombres y alias del panel; no reescribe operaciones, entregas, intentos ni conciliaciones existentes.
+
 ## Qué cambia
 
 | Aspecto | Antes | Ahora |

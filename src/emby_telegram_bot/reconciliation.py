@@ -99,15 +99,17 @@ class ReconciliationService:
             db.executescript('''CREATE TABLE IF NOT EXISTS reconciliation_config (id INTEGER PRIMARY KEY CHECK(id=1),history_from TEXT);
             CREATE TABLE IF NOT EXISTS reconciliation_runs (id TEXT PRIMARY KEY,created_at TEXT NOT NULL,summary_json TEXT NOT NULL,rows_json TEXT NOT NULL,items_json TEXT NOT NULL);''')
             db.execute('INSERT OR IGNORE INTO reconciliation_config VALUES (1,?)',('2026-10-01T00:00:00Z' if mode=='demo' else None,))
+    def current_chats(self):
+        return self.chats() if callable(self.chats) else self.chats
     def config(self):
         with self.store.connection() as db:history=db.execute('SELECT history_from FROM reconciliation_config WHERE id=1').fetchone()[0]
-        return dict(mode=self.mode,history_from=history,chat_ids=[c['id'] for c in self.chats],libraries=self.catalog.reconciliation_libraries(),defaults=dict(date_from='2026-10-01T00:00:00Z' if self.mode=='demo' else None,date_to='2026-10-31T23:59:59Z' if self.mode=='demo' else None,item_types=['Movie','Episode']))
+        return dict(mode=self.mode,history_from=history,chat_ids=[c['id'] for c in self.current_chats()],libraries=self.catalog.reconciliation_libraries(),defaults=dict(date_from='2026-10-01T00:00:00Z' if self.mode=='demo' else None,date_to='2026-10-31T23:59:59Z' if self.mode=='demo' else None,item_types=['Movie','Episode']))
     def configure(self,value):
         if value is not None:timestamp(value)
         with self.store.connection() as db:db.execute('UPDATE reconciliation_config SET history_from=? WHERE id=1',(value,))
         return self.config()
     def run(self,scope):
-        config=self.config(); labels={c['id']:c['label'] for c in self.chats}
+        config=self.config(); labels={c['id']:c['label'] for c in self.current_chats()}
         chats=scope.get('chat_ids',config['chat_ids']);types=scope.get('item_types',['Movie','Episode'])
         library_config={v['id']:v for v in config['libraries']}
         libs=scope.get('library_ids')

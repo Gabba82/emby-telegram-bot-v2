@@ -111,6 +111,12 @@ El panel «Emby Telegram Manager» se sirve en `/manager/` y tiene cuatro seccio
 
 **Panel operativo (opcional).** Está desactivado por defecto. Para activarlo define en `.env` `PANEL_ENABLED=true`, `PANEL_ADMIN_PASSWORD` (≥ 16 caracteres), `PANEL_SECRET_KEY` (≥ 32 caracteres, distinta de la contraseña) y, si quieres permitir envíos manuales desde el panel, `PANEL_ALLOW_SENDS=true`. Detalle y requisitos de HTTPS en [`INSTALLATION.md`](INSTALLATION.md) y [`SECURITY.md`](SECURITY.md). Con `PANEL_ALLOW_SENDS=false` el panel funciona en solo consulta/preparación: se puede explorar y preparar lotes, pero el servidor rechaza la confirmación.
 
+### Nombres y alias de destinos
+
+Al arrancar, el bot reutiliza `getChat` para guardar el nombre real de cada destino del panel. Los selectores muestran ese nombre y el ID de Telegram como referencia; internamente filtros, historial, conciliación y envíos siguen usando exclusivamente el ID. Las respuestas correctas se memorizan durante el proceso y se conservan en el mismo volumen SQLite. Si Telegram no responde, se usa el último nombre guardado y, si aún no existe, el ID.
+
+En **Envío → Destinos** se puede guardar un alias opcional, usado solo para presentar el chat. Vaciarlo recupera el nombre de Telegram. `CHAT_LABELS` sigue siendo compatible y actúa como alias inicial la primera vez; los cambios del panel persisten tras reiniciar el contenedor. Las tablas añadidas para esta presentación no modifican las entregas ni la versión del esquema del historial.
+
 ### Biblioteca
 
 Muestra películas y series de Emby (los 60 elementos más recientes, o los resultados de la búsqueda; este límite es solo de esta pestaña: la Conciliación recorre toda la biblioteca) en páginas de 12, con filtros por título, tipo, chat y estado. Cada carátula lleva un punto por destino con su estado (`enviado`, `fallido`, `incierto`, etc.). Marca hasta **20 títulos** y pulsa **Preparar envío**.
@@ -121,7 +127,7 @@ Lista las entregas (10 por página) filtrables por chat y estado; cada una se pu
 
 ### Envío
 
-Reúne el lote (hasta 20 títulos), los **destinos** (hasta 8, cada uno con el recuento de estados actual) y una **vista previa** del texto exacto (máximo 1024 caracteres). Hay dos modos:
+Reúne el lote (hasta 20 títulos), los **destinos** (hasta 8, cada uno con nombre legible, ID y recuento de estados actual) y una **vista previa** del texto exacto (máximo 1024 caracteres). Hay dos modos:
 
 - **Recuperar** (por defecto): lo ya enviado se omite; lo pendiente o fallido se reintenta con el texto original; lo incierto o sin historial exige decisión.
 - **Reenvío voluntario**: permite duplicar a propósito un contenido ya enviado, solo si se decide explícitamente. No está disponible en lotes de conciliación.

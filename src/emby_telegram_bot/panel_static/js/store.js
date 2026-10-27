@@ -147,6 +147,19 @@
       });
     }
 
+    function saveChatAlias(id, alias) {
+      return Api.setChatAlias(id, alias).then(function (data) {
+        var index = state.chats.list.findIndex(function (chat) { return chat.id === id; });
+        if (index >= 0 && data.chat) state.chats.list[index] = data.chat;
+        say(data.chat && data.chat.alias ? 'Alias guardado para ' + data.chat.label + '.' : 'Alias eliminado.');
+        emit();
+      }, function (err) {
+        if (lostSession(err)) return;
+        say('No se pudo guardar el alias: ' + Api.describe(err));
+        emit();
+      });
+    }
+
     function remember(items) {
       items.forEach(function (it) { state.known[it.id] = it; });
     }
@@ -637,7 +650,7 @@
       setDecision: setDecision, decideAllPending: decideAllPending, clearDecisions: clearDecisions, setMode: setMode, setPreviewIndex: setPreviewIndex,
       openConfirm: openConfirm, closeConfirm: closeConfirm, setAck: setAck, confirmSend: confirmSend, canConfirm: canConfirm, needsDuplicateAck: needsDuplicateAck,
       checkBatch: checkBatch, backToCompose: backToCompose, recoverFromResult: recoverFromResult, newBatch: newBatch, viewHistoryAfterResult: viewHistoryAfterResult,
-      toggleDetail: toggleDetail, loadDelivery: loadDelivery, prepareRecovery: prepareRecovery,
+      toggleDetail: toggleDetail, loadDelivery: loadDelivery, prepareRecovery: prepareRecovery, saveChatAlias: saveChatAlias,
       startScope: startScope, cancelScope: cancelScope,
       // enganches para módulos de vista (reconciliation.js)
       registerView: function (name, onEnter) { viewHooks[name] = onEnter; },
@@ -646,7 +659,15 @@
       lostSession: lostSession, say: say,
       selectedItems: function () { return state.selected.map(function (id) { return state.known[id]; }).filter(Boolean); },
       selectedChats: function () { return state.chats.list.filter(function (c) { return state.selChats.indexOf(c.id) >= 0; }); },
-      chatLabel: function (id) { var c = state.chats.list.filter(function (x) { return x.id === id; })[0]; return c ? c.label : id; }
+      chatLabel: function (id) { var c = state.chats.list.filter(function (x) { return x.id === id; })[0]; return c ? c.label : id; },
+      chatOptionLabel: function (id) {
+        var c = state.chats.list.filter(function (x) { return x.id === id; })[0];
+        if (!c) return id;
+        var parts = [c.label];
+        if (c.telegram_name && c.telegram_name !== c.label) parts.push(c.telegram_name);
+        if (c.id !== c.label) parts.push(c.id);
+        return parts.join(' · ');
+      }
     };
   }
 

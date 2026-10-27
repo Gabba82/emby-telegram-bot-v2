@@ -338,7 +338,7 @@
     if (c.status === 'error') return head + note('alert--err', 'alert', '<p><b>No se pudo cargar la configuración.</b> ' + esc(Api.describe(c.error)) + '</p>' + retryBtn('config')) + '</section>';
     if (c.status !== 'ok' || !r.form) return head + H.spinner('Cargando la configuración…') + '</section>';
     var d = c.data, f = r.form, demo = d.mode === 'demo';
-    var chats = (d.chat_ids || []).map(function (id) { return [id, store.chatLabel(id)]; });
+    var chats = (d.chat_ids || []).map(function (id) { return [id, store.chatOptionLabel(id)]; });
     var libs = (d.libraries || []).map(function (l) { return [l.id, l.label || l.id]; });
     var scen = demo
       ? '<label class="field"><span>Escenario de prueba (solo demostración)</span><select data-fid="rf-scenario" data-action="recon-field" data-field="scenario">' + SCENARIOS.map(function (s) {
@@ -465,7 +465,7 @@
         return '<option value="' + s + '"' + (f.status === s ? ' selected' : '') + '>' + esc(LABEL[s]) + '</option>';
       }).join('') + '</select></label>' +
       '<label class="field"><span>Destino</span><select data-fid="recon-chat" data-action="recon-chat"><option value="">Todos</option>' + chatIds.map(function (id) {
-        return '<option value="' + esc(id) + '"' + (f.chat === id ? ' selected' : '') + '>' + esc(store.chatLabel(id)) + '</option>';
+        return '<option value="' + esc(id) + '"' + (f.chat === id ? ' selected' : '') + '>' + esc(store.chatOptionLabel(id)) + '</option>';
       }).join('') + '</select></label></div>';
     var body;
     if (cur.status === 'error' && !cur.items.length) body = note('alert--err', 'alert', '<p><b>No se pudieron cargar las filas.</b> ' + esc(Api.describe(cur.error)) + '</p>' + retryBtn('items'));

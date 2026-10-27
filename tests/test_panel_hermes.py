@@ -955,8 +955,8 @@ class TestSoloLectura:
         EMBY-004 anade tres POST de conciliacion (config, runs y prepare de run) que
         NO envian publicaciones: config fija la fecha de inicio conocida, runs solo
         LEE la biblioteca y prepare devuelve un plan del motor003 sin ejecutarlo.
-        Siguen prohibidos cualquier otro POST: el unico que envia es
-        /api/batches/<batch_id>/confirm.
+        EMBY-005 v0.5.2 añade el POST de alias, que solo modifica presentación.
+        El unico que envia es /api/batches/<batch_id>/confirm.
         """
         writes = set()
         for rule in app.url_map.iter_rules():
@@ -968,6 +968,7 @@ class TestSoloLectura:
         expected = {
             ("/api/login", ("POST",)),
             ("/api/logout", ("POST",)),
+            ("/api/chats/<chat_id>/alias", ("POST",)),
             ("/api/prepare", ("POST",)),
             ("/api/batches/<batch_id>/confirm", ("POST",)),
             ("/api/reconciliation/config", ("POST",)),

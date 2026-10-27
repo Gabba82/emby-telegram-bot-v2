@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request, session, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
-def register_manager(app, store, publications, catalog, chats, *, password, mode='operational', allow_sends=False):
+def register_manager(app, store, publications, catalog, chats, *, password, mode='operational', allow_sends=False, chat_directory=None):
     if mode not in ('demo', 'operational') or not password:
         raise ValueError('Explicit panel mode and administrative password required')
     app.secret_key = app.secret_key or secrets.token_hex(32)
@@ -20,7 +20,11 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
     assets = Path(__file__).with_name('panel_static')
     password_hash = generate_password_hash(password)
     failures = defaultdict(list)
-    labels = {c['id']: c['label'] for c in chats}
+    def current_chats():
+        return chat_directory.list() if chat_directory is not None else chats
+
+    def current_labels():
+        return {chat['id']: chat['label'] for chat in current_chats()}
     with store.connection() as db:
         db.execute('CREATE TABLE IF NOT EXISTS panel_batches (id TEXT PRIMARY KEY, owner TEXT NOT NULL, plan TEXT NOT NULL, status TEXT NOT NULL, results TEXT, expires REAL NOT NULL)')
 
@@ -110,7 +114,16 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
     @bp.get('/api/chats')
     @admin
     def get_chats():
-        return jsonify(chats=chats)
+        return jsonify(chats=current_chats())
+
+    @bp.post('/api/chats/<chat_id>/alias')
+    @admin
+    def set_chat_alias(chat_id):
+        if chat_directory is None:
+            return error('aliases_unavailable', 'Los alias persistentes no están disponibles en este modo.', 409)
+        if set(request.json) != {'alias'}:
+            raise ValueError()
+        return jsonify(chat=chat_directory.set_alias(chat_id, request.json['alias']))
 
     def page_number():
         page = int(request.args.get('page', '1'))
@@ -118,8 +131,9 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
             raise ValueError()
         return page
 
-    def public_row(row):
+    def public_row(row, labels=None):
         keys = ('id','operation_id','item_id','title','chat_id','status','message_id','error_type','source','actor','created_at','updated_at','attempt_count')
+        labels=labels or current_labels()
         return dict({k: row[k] for k in keys}, chat_label=labels.get(row['chat_id'], row['chat_id']))
 
     @bp.get('/api/catalog')
@@ -128,10 +142,11 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         page = page_number()
         items = catalog.list(request.args.get('query','')[:200])
         kind, chat, status = (request.args.get(k,'') for k in ('kind','chat_id','status'))
+        chat_list=current_chats()
         output = []
         for raw in items:
             item = catalog.present(raw)
-            item['states'] = {c['id']: store.item_status(item['id'], c['id']) for c in chats}
+            item['states'] = {c['id']: store.item_status(item['id'], c['id']) for c in chat_list}
             if kind not in ('','all',item['kind']):
                 continue
             if status and status not in ([item['states'].get(chat)] if chat else item['states'].values()):
@@ -157,7 +172,8 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         with store.connection() as db:
             total = db.execute('SELECT count(*) FROM deliveries d JOIN operations o ON o.id=d.operation_id WHERE '+where, params).fetchone()[0]
             rows = store._rows(db, where, tuple(params)+ (10,(page-1)*10), 'LIMIT ? OFFSET ?')
-        return jsonify(items=[public_row(r) for r in rows], total=total,page=page,pages=max(1,(total+9)//10))
+        labels=current_labels()
+        return jsonify(items=[public_row(r,labels) for r in rows], total=total,page=page,pages=max(1,(total+9)//10))
 
     @bp.get('/api/deliveries/<int:delivery_id>')
     @admin
@@ -178,6 +194,7 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
     @bp.post('/api/prepare')
     @admin
     def prepare():
+        labels=current_labels()
         body = request.json
         ids, targets = body.get('item_ids'), body.get('chat_ids')
         if not isinstance(ids,list) or not isinstance(targets,list) or not 1<=len(ids)<=20 or not 1<=len(targets)<=8:
@@ -191,6 +208,7 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         return jsonify(build_plan(pairs,strategy,decisions))
 
     def build_plan(pairs,strategy,decisions,scope=None):
+        labels=current_labels()
         rows=[]
         for item,chat in pairs:
             item_id=item['Id']
@@ -292,7 +310,7 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         return jsonify(result)
 
     from .reconciliation import ReconciliationService, STATUSES, classify
-    reconciliation=ReconciliationService(store,catalog,chats,mode)
+    reconciliation=ReconciliationService(store,catalog,current_chats,mode)
     app.extensions['reconciliation']=reconciliation
 
     @bp.get('/api/reconciliation/config')

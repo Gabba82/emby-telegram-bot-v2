@@ -46,6 +46,7 @@ class DemoCatalog:
 
 class DemoTelegram:
     def __init__(self,store):self.store=store
+    def validate_chat(self,chat_id):return next(c['label'] for c in CHATS if c['id']==chat_id)
     def send(self,caption,image,chat_ids):
         results=[]
         with self.store.connection() as db:
@@ -61,9 +62,14 @@ def create_demo_app(db_path, password='emby-demo-003', secret_key=None):
     app.secret_key=secret_key
     store=DeliveryStore(str(db_path))
     catalog=DemoCatalog()
-    publications=PublicationService(store,DemoTelegram(store),lambda item:None)
+    telegram=DemoTelegram(store)
+    publications=PublicationService(store,telegram,lambda item:None)
     app.extensions.update(delivery_store=store,publications=publications,demo_catalog=catalog)
-    register_manager(app,store,publications,catalog,CHATS,password=password,mode='demo',allow_sends=True)
+    from .chat_directory import ChatDirectory
+    chat_directory=ChatDirectory(store,telegram,[chat['id'] for chat in CHATS],kinds={chat['id']:chat['kind'] for chat in CHATS})
+    chat_directory.refresh_names()
+    app.extensions['chat_directory']=chat_directory
+    register_manager(app,store,publications,catalog,chat_directory.list(),password=password,mode='demo',allow_sends=True,chat_directory=chat_directory)
     # Idempotent seed keys mean restarting never adds another publication.
     for item_id,chat in [('m1','demo-cine'),('m2','demo-series'),('m3','demo-private')]:
         item=catalog.get(item_id)

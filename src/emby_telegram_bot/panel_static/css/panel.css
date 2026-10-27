@@ -242,6 +242,8 @@ main:focus, h2:focus { outline: none; }
 .dest__pick input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; margin: 0; }
 .dest__main { display: grid; }
 .dest__name { font-weight: 700; }
+.dest__alias { display: flex; gap: 8px; align-items: end; padding-left: 34px; }
+.dest__alias .field { margin: 0; }
 
 .plan-controls { display: grid; gap: 12px; padding: 12px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; }
 .stats { display: flex; flex-wrap: wrap; gap: 8px 20px; }
