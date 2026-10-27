@@ -1,6 +1,20 @@
-# Notas de la versión — EMBY-005 (0.5.0, propuesta)
+# Notas de la versión — EMBY-005 (0.5.1, propuesta)
 
-Rama `release/emby-005`, derivada de `main` y consolidada con el código y las pruebas finales de EMBY-004. La versión `0.5.0` es una **propuesta**: no hay etiqueta ni release publicados, y la rama no se ha desplegado en producción.
+Revisión derivada de `main` (`dc22118`) para corregir la selección de bibliotecas de conciliación. La versión `0.5.1` es una **propuesta**: no hay etiqueta ni release publicados, y la rama no se ha desplegado en producción.
+
+## Corrección 0.5.1
+
+- La conciliación expone únicamente bibliotecas Emby con `CollectionType=movies` o `CollectionType=tvshows`; Pelis y Series quedan seleccionadas por defecto.
+- Cada biblioteca se consulta con el único tipo compatible: `Movie` para películas y `Episode` para series.
+- `Playlist`, `BoxSet` y cualquier otro tipo inesperado se excluyen del resultado y dejan la consulta en estado parcial, con recuento por tipo y sin clasificar «posibles omisiones».
+- Una petición sin `library_ids` usa las bibliotecas compatibles; una lista vacía o con identificadores no ofrecidos se rechaza.
+- No cambian el entorno, los webhooks, el esquema SQLite ni `PANEL_ALLOW_SENDS=false`. Esta revisión no despliega nada en Monster.
+
+Validación local de la revisión:
+
+- **73 pruebas focalizadas aprobadas**: núcleo, API, persistencia y recuperación de conciliación.
+- **307 pruebas Python aprobadas** de la suite general. Se excluyeron 6 pruebas preexistentes del cliente Telegram porque el bloqueo de red de la suite intercepta los sockets internos del bucle asíncrono en Windows con Python 3.13; ninguna pertenece a la conciliación.
+- Sintaxis JavaScript del panel, compilación Python y comprobación de espacios del diff aprobadas.
 
 ## Resumen
 

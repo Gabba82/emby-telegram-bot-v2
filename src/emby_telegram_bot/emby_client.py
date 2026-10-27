@@ -6,6 +6,12 @@ from typing import Any
 import requests
 
 
+RECONCILIATION_COLLECTION_TYPES = {
+    "movies": ("Movie",),
+    "tvshows": ("Episode",),
+}
+
+
 class EmbyClient:
     def __init__(self, base_url: str, api_key: str, timeout_seconds: int) -> None:
         self._base_url = base_url.rstrip("/")
@@ -28,7 +34,20 @@ class EmbyClient:
     def get_libraries(self):
         payload=self._get('Library/MediaFolders').json()
         if not isinstance(payload,dict) or not isinstance(payload.get('Items'),list):raise ValueError('Invalid library response')
-        return [dict(id=str(v['Id']),label=str(v.get('Name','Biblioteca'))) for v in payload['Items'] if isinstance(v,dict) and v.get('Id')]
+        libraries=[]
+        for value in payload['Items']:
+            if not isinstance(value,dict) or not value.get('Id'):
+                continue
+            collection_type=str(value.get('CollectionType') or '').strip().casefold()
+            item_types=RECONCILIATION_COLLECTION_TYPES.get(collection_type)
+            if not item_types:
+                continue
+            libraries.append(dict(
+                id=str(value['Id']),
+                label=str(value.get('Name') or 'Biblioteca'),
+                item_types=list(item_types),
+            ))
+        return libraries
 
     def validate_credentials(self) -> str:
         payload = self._get("System/Info").json()

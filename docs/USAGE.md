@@ -132,7 +132,7 @@ El plan por destino indica, para cada par, si se **envía**, se **omite** o requ
 
 La pestaña **Conciliación** responde a la pregunta «¿qué hay en la biblioteca de Emby que no consta como publicado?». **Es de solo lectura**: consultar no envía nada ni cambia el historial.
 
-1. **Consulta.** Elige destinos, bibliotecas, tipos (películas y/o episodios) y el rango «Añadidos desde/hasta» (fechas en UTC). El panel lee Emby por páginas y guarda una **instantánea** de la consulta; no se actualiza sola.
+1. **Consulta.** Elige destinos, bibliotecas, tipos (películas y/o episodios) y el rango «Añadidos desde/hasta» (fechas en UTC). Solo aparecen bibliotecas compatibles de películas y series, seleccionadas por defecto; listas de reproducción, colecciones, vídeos musicales y vistas sin tipo reconocido quedan fuera. Cada biblioteca se consulta únicamente con su tipo compatible. El panel lee Emby por páginas y guarda una **instantánea** de la consulta; no se actualiza sola.
 2. **Inicio del historial.** Fecha desde la que el historial de entregas está completo. Debe ser una **fecha conocida de registro, no una estimación** (hay una casilla de confirmación). Es independiente del rango de la consulta. Las consultas anteriores conservan la fecha con la que se calcularon.
 3. **Resultado.** Cada par contenido × destino recibe un estado:
 
@@ -145,7 +145,7 @@ La pestaña **Conciliación** responde a la pregunta «¿qué hay en la bibliote
 | Historial desconocido | No hay evidencia suficiente para concluir: contenido fuera del ámbito, sin fecha de alta fiable, anterior al inicio conocido del historial, sin inicio establecido o con lectura incompleta. |
 | Posible omisión | Dentro del período registrado, con lectura completa y sin evidencia de publicación. **Requiere revisión manual**: es un aviso, no una conclusión. |
 
-Cada fila tiene **Ver detalle**. La lectura se marca **incompleta** si Emby falla, cambia el total durante la consulta, repite elementos o se alcanza el límite de la consulta; en ese caso nunca se concluye una «posible omisión». Las consultas anteriores se listan y se pueden reabrir sin volver a leer la biblioteca.
+Cada fila tiene **Ver detalle**. La lectura se marca **incompleta** si Emby falla, cambia el total durante la consulta, repite elementos, devuelve un tipo inesperado o se alcanza el límite de la consulta; en ese caso nunca se concluye una «posible omisión». El diagnóstico de tipos inesperados incluye su nombre y cantidad. Las consultas anteriores se listan y se pueden reabrir sin volver a leer la biblioteca.
 
 4. **Preparar recuperación.** Marca hasta **20 pares** y pulsa **Preparar recuperación**. Se abre **Envío** con un **lote exacto**: solo se enviará esa lista, sin añadir otros destinos ni títulos, y solo en modo recuperación. Si el inicio del historial cambió desde la consulta, el panel exige repetirla.
 

@@ -345,7 +345,7 @@
         return '<option value="' + s[0] + '"' + (f.scenario === s[0] ? ' selected' : '') + '>' + esc(s[1]) + '</option>';
       }).join('') + '</select></label>' : '';
     return head +
-      '<p class="muted small">Elige qué parte de la biblioteca y qué destinos comparar. La consulta solo lee: no envía ni cambia nada. Las fechas se interpretan en UTC (de 00:00 a 23:59).</p>' +
+      '<p class="muted small">Solo se muestran bibliotecas compatibles de películas y series; ambas quedan seleccionadas por defecto. La consulta solo lee: no envía ni cambia nada. Las fechas se interpretan en UTC (de 00:00 a 23:59).</p>' +
       '<form id="recon-form" class="rform" novalidate>' +
       checkList('Destinos', 'chat_ids', chats, f.chat_ids, 'rf-first') +
       checkList('Bibliotecas', 'library_ids', libs, f.library_ids) +
