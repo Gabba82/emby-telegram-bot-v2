@@ -119,6 +119,9 @@ class TestConfig:
         defaults = body["defaults"]
         assert set(defaults) == {"date_from", "date_to", "item_types"}
         assert defaults["item_types"] == ["Movie", "Episode"]
+        assert {lib["id"]: lib["item_types"] for lib in body["libraries"]} == {
+            "demo-movies": ["Movie"], "demo-episodes": ["Episode"]
+        }
 
     def test_config_post_history_from_null_valido(self, recon):
         token, client = recon

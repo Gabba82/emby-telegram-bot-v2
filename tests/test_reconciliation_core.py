@@ -1,6 +1,8 @@
 """Focused invariants for complete scans and classification, with no network."""
 import pytest
 from emby_telegram_bot.reconciliation import collect_pages, classify
+from emby_telegram_bot.reconciliation import ReconciliationService
+from emby_telegram_bot.deliveries import DeliveryStore
 from emby_telegram_bot.emby_client import EmbyClient
 
 
@@ -54,6 +56,12 @@ def test_confirmed_delivery_survives_later_failure():
     assert result['status']=='delivered' and not result['can_prepare'] and result['delivery_id']==1
 
 
+def test_classification_rejects_unsupported_type_even_with_evidence():
+    result=classify(dict(Type='Playlist',DateCreated='2026-10-05T00:00:00Z'),[dict(id=1,status='sent')],history_from='2026-10-01',date_from=None,date_to=None,complete=True)
+    assert result['status']=='history_unknown'
+    assert not result['eligible'] and not result['can_prepare'] and result['delivery_id'] is None
+
+
 def test_client_requests_raw_episode_pagination(monkeypatch):
     calls=[]
     class Response:
@@ -66,11 +74,63 @@ def test_client_requests_raw_episode_pagination(monkeypatch):
     assert params['IncludeItemTypes']=='Episode' and params['Recursive']=='true' and params['ParentId']=='lib'
 
 
-def test_libraries_expose_only_identity_and_label(monkeypatch):
+def test_libraries_expose_only_compatible_media_folders(monkeypatch):
     class Response:
-        def json(self):return dict(Items=[dict(Id='lib',Name='Movies',Path='/private/mount')])
+        def json(self):return dict(Items=[
+            dict(Id='movies',Name='Pelis',CollectionType='movies',Path='/private/movies'),
+            dict(Id='series',Name='Series',CollectionType='tvshows',Path='/private/series'),
+            dict(Id='playlists',Name='Lista de reproducción',CollectionType='playlists'),
+            dict(Id='collections',Name='Colecciones',CollectionType='boxsets'),
+            dict(Id='music-videos',Name='Videos musicales',CollectionType='musicvideos'),
+            dict(Id='unknown',Name='Vista sin tipo'),
+        ])
     client=EmbyClient('http://synthetic.invalid','synthetic-key',3)
     calls=[]
     monkeypatch.setattr(client,'_get',lambda path: calls.append(path) or Response())
-    assert client.get_libraries()==[dict(id='lib',label='Movies')]
+    assert client.get_libraries()==[
+        dict(id='movies',label='Pelis',item_types=['Movie']),
+        dict(id='series',label='Series',item_types=['Episode']),
+    ]
     assert calls==['Library/MediaFolders']
+
+
+def test_unexpected_types_make_scan_partial_and_are_diagnosed():
+    payload=dict(Items=[
+        dict(Id='movie-1',Type='Movie'),
+        dict(Id='playlist-1',Type='Playlist'),
+        dict(Id='boxset-1',Type='BoxSet'),
+    ],TotalRecordCount=3)
+    result=collect_pages(lambda **kw:payload,['movies'],['Movie'],page_size=3)
+    assert not result['complete']
+    assert result['unexpected_types']=={'Playlist':1,'BoxSet':1}
+    assert [item['Id'] for item in result['items']]==['movie-1']
+    assert result['issues'][0]['code']=='UnexpectedType'
+
+
+def test_service_defaults_to_safe_libraries_and_narrows_each_query(tmp_path):
+    class Catalog:
+        def __init__(self):self.calls=[]
+        def reconciliation_libraries(self):
+            return [
+                dict(id='movies',label='Pelis',item_types=['Movie']),
+                dict(id='series',label='Series',item_types=['Episode']),
+            ]
+        def reconciliation_page(self,**kwargs):
+            self.calls.append(kwargs)
+            return dict(Items=[],TotalRecordCount=0)
+    catalog=Catalog()
+    service=ReconciliationService(DeliveryStore(str(tmp_path/'history.sqlite3')),catalog,[dict(id='chat',label='Novedades')],'operational')
+    summary=service.run({'chat_ids':['chat']})
+    assert summary['complete']
+    assert summary['scope']['library_ids']==['movies','series']
+    assert [(call['library_id'],call['item_types']) for call in catalog.calls]==[
+        ('movies',['Movie']),('series',['Episode'])
+    ]
+
+
+def test_service_rejects_empty_or_unknown_library_selection(tmp_path):
+    class Catalog:
+        def reconciliation_libraries(self):return [dict(id='movies',label='Pelis',item_types=['Movie'])]
+    service=ReconciliationService(DeliveryStore(str(tmp_path/'history.sqlite3')),Catalog(),[dict(id='chat',label='Novedades')],'operational')
+    with pytest.raises(ValueError):service.run({'chat_ids':['chat'],'library_ids':[]})
+    with pytest.raises(ValueError):service.run({'chat_ids':['chat'],'library_ids':['playlists']})

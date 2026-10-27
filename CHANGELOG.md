@@ -2,6 +2,18 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.5.1] — EMBY-005 (propuesta, sin etiqueta ni publicación)
+
+### Corregido
+
+- La conciliación solo ofrece vistas Emby compatibles (`movies` y `tvshows`), selecciona Pelis y Series por defecto y consulta cada una únicamente con su tipo válido (`Movie` o `Episode`).
+- Los tipos inesperados, incluidos `Playlist` y `BoxSet`, se descartan y convierten la lectura en parcial con un diagnóstico por tipo; una lectura parcial nunca produce «posibles omisiones».
+- La API rechaza selecciones de bibliotecas vacías, desconocidas o no compatibles y aplica las bibliotecas seguras por defecto si el cliente omite el campo.
+
+### Seguridad operativa
+
+- La revisión no cambia variables de entorno, webhooks, el esquema SQLite ni el valor seguro `PANEL_ALLOW_SENDS=false`, y no requiere despliegue.
+
 ## [0.5.0] — EMBY-005 (propuesta, sin etiqueta ni publicación)
 
 Consolida en una sola rama (`release/emby-005`) las fases EMBY-002, 003 y 004 sobre la base original e incorpora instalación Docker y guía de migración. La versión `0.5.0` es una propuesta pendiente de revisión: no hay etiqueta ni release creados.

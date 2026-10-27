@@ -13,7 +13,7 @@ class DemoCatalog:
     def __init__(self):
         self.items=[dict(Id=('m'+str(i+1) if i<8 else 's'+str(i-7)),Name=t,Type='Movie' if i<8 else 'Series',ProductionYear=2020+i%6,Overview='Una historia ficticia para explorar la biblioteca y preparar publicaciones sin conectar con servicios reales.') for i,t in enumerate(TITLES)]
     def reconciliation_libraries(self):
-        return [dict(id='demo-movies',label='Películas de prueba'),dict(id='demo-episodes',label='Episodios de prueba')]
+        return [dict(id='demo-movies',label='Películas de prueba',item_types=['Movie']),dict(id='demo-episodes',label='Episodios de prueba',item_types=['Episode'])]
     def reconciliation_items(self):
         movies=[dict(i,DateCreated='2026-10-05T10:00:00Z',LibraryId='demo-movies') for i in self.items if i['Type']=='Movie']
         episodes=[dict(Id='e'+str(n),Name='Capítulo '+str(n),Type='Episode',SeriesId='s1',SeriesName='Archivo Boreal',ParentIndexNumber=1,IndexNumber=n,DateCreated='2026-10-12T10:00:00Z',LibraryId='demo-episodes',ProductionYear=2026,Overview='Episodio sintético de conciliación.') for n in range(1,27)]
