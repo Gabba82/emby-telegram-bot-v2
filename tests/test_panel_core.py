@@ -92,6 +92,12 @@ def test_disabled_operational_adapter_and_safe_errors(panel):
     assert login['mode']=='operational' and not login['sends_enabled']
     headers={'X-CSRF-Token':login['csrf_token']}
     assert client.post('/api/batches/anything/confirm',json={'confirm':True},headers=headers).status_code==403
+    individual=client.post('/api/individual-recovery/prepare',json={
+        'item_id':'m4','chat_id':'demo-cine','decision':'send'},headers=headers)
+    assert individual.status_code==200
+    blocked=client.post('/api/batches/'+individual.json['batch_id']+'/confirm',json={
+        'confirm':True,'accept_duplicate_risk':True},headers=headers)
+    assert blocked.status_code==403 and blocked.json['error']=='sends_disabled'
 
 def test_storage_failure_prevents_publish(panel,monkeypatch):
     import sqlite3

@@ -2,7 +2,7 @@
  *   PANEL_URL=http://127.0.0.1:8093 PANEL_PASSWORD=emby-demo-003 \
  *   PLAYWRIGHT_CORE=<ruta a playwright-core> CHROMIUM_PATH=<chrome-headless-shell> \
  *   node tests/panel-browser.cjs [--shots]
- * Recorre login, biblioteca, historial, envío con decisiones, confirmación y resultados, fallos de red y móvil 390px.
+ * Recorre login, biblioteca, recuperación individual, historial, envío con decisiones, confirmación y resultados, fallos de red y móvil 390px.
  * Cualquier petición fuera del origen del panel hace fallar la prueba.
  */
 'use strict';
@@ -74,6 +74,26 @@ function check(name, ok, detail) { results.push({ name, ok: !!ok, detail }); con
   const storage = await page.evaluate(() => ({ l: localStorage.length, s: sessionStorage.length, c: document.cookie }));
   check('sin localStorage/sessionStorage y cookie de sesión no legible por JS', storage.l === 0 && storage.s === 0 && !/session/.test(storage.c), JSON.stringify(storage));
   await shot(page, '03-biblioteca-escritorio');
+
+  // Recuperación individual: 1 contenido × 1 destino, enviado protegido y riesgo explícito.
+  await page.click('[data-view="individual"]');
+  await page.waitForSelector('#individual-form');
+  await page.selectOption('[data-action="individual-item"]', 'm1');
+  await page.selectOption('[data-action="individual-chat"]', 'demo-cine');
+  await page.click('[data-action="individual-prepare"]');
+  await page.waitForSelector('.panel h3:has-text("Estado actual")');
+  check('recuperación individual muestra el estado enviado', /Enviado/.test(await text(page, '#view')));
+  check('lo ya enviado no ofrece confirmación individual', (await page.locator('[data-action="individual-confirm"]').count()) === 0);
+  await page.selectOption('[data-action="individual-item"]', 'm4');
+  await page.click('[data-action="individual-prepare"]');
+  await page.waitForSelector('[data-action="individual-decision"][data-value="send"]');
+  check('historial desconocido exige decisión explícita', /Decisión explícita necesaria/.test(await text(page, '#view')));
+  await page.click('[data-action="individual-decision"][data-value="send"]');
+  await page.waitForSelector('[data-action="individual-ack"]');
+  await page.check('[data-action="individual-ack"]');
+  check('la confirmación individual queda preparada sin ejecutarse', await page.locator('[data-action="individual-confirm"]').isEnabled());
+  await page.click('[data-view="library"]');
+  await page.waitForSelector('.grid .card');
 
   // Búsqueda y filtros
   const total0 = await page.locator('.grid .card').count();

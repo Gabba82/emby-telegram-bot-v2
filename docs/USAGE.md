@@ -107,7 +107,7 @@ Después abre <http://127.0.0.1:8093/manager/> e inicia sesión con la contrase�
 
 ## 5. Panel web
 
-El panel «Emby Telegram Manager» se sirve en `/manager/` y tiene cuatro secciones: **Biblioteca**, **Historial**, **Conciliación** y **Envío**.
+El panel «Emby Telegram Manager» se sirve en `/manager/` y tiene cinco secciones: **Biblioteca**, **Historial**, **Conciliación**, **Recuperación individual** y **Envío**.
 
 **Panel operativo (opcional).** Está desactivado por defecto. Para activarlo define en `.env` `PANEL_ENABLED=true`, `PANEL_ADMIN_PASSWORD` (≥ 16 caracteres), `PANEL_SECRET_KEY` (≥ 32 caracteres, distinta de la contraseña) y, si quieres permitir envíos manuales desde el panel, `PANEL_ALLOW_SENDS=true`. Detalle y requisitos de HTTPS en [`INSTALLATION.md`](INSTALLATION.md) y [`SECURITY.md`](SECURITY.md). Con `PANEL_ALLOW_SENDS=false` el panel funciona en solo consulta/preparación: se puede explorar y preparar lotes, pero el servidor rechaza la confirmación.
 
@@ -133,6 +133,18 @@ Reúne el lote (hasta 20 títulos), los **destinos** (hasta 8, cada uno con nomb
 - **Reenvío voluntario**: permite duplicar a propósito un contenido ya enviado, solo si se decide explícitamente. No está disponible en lotes de conciliación.
 
 El plan por destino indica, para cada par, si se **envía**, se **omite** o requiere **decisión** (`Enviar igualmente` / `Omitir`, con atajos para todos los dudosos). **Revisar y confirmar** no está disponible mientras queden decisiones pendientes o algún texto supere el límite.
+
+### Recuperación individual
+
+Este flujo es independiente del envío masivo y limita cada operación a **una película o episodio y un único destino**. La búsqueda de esta pestaña no agrupa episodios por serie. Antes de confirmar muestra el estado actual, el último intento y su fecha, el resultado conocido y el texto exacto que se publicaría.
+
+- Una entrega ya `enviada` se omite y no puede confirmarse de nuevo.
+- Una entrega `pendiente` o `fallida` conserva el texto registrado y puede reintentarse.
+- Una entrega `incierta` o sin historial exige decidir expresamente si se asume el riesgo de duplicación.
+- La confirmación final se desactiva durante la petición. Si se pierde la respuesta, **no se debe repetir**: el botón **Consultar resultado** lee la operación guardada.
+- El plan caduca a los 15 minutos. Tras un reinicio, una operación que estuviera en curso queda `interrumpida`, conserva su traza y nunca continúa automáticamente.
+
+Con `PANEL_ALLOW_SENDS=false` se puede consultar y preparar la vista previa, pero la confirmación continúa bloqueada por el servidor.
 
 ## 6. Conciliación
 

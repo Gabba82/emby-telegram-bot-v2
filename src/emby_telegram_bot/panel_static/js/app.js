@@ -4,6 +4,7 @@
 
   var store = EmbyStore.createStore();
   EmbyRecon.attach(store);
+  EmbyIndividual.attach(store);
   var V = EmbyViews;
   var $view = document.getElementById('view');
   var $tray = document.getElementById('tray');
@@ -127,6 +128,12 @@
       case 'recover-result': store.recoverFromResult(); break;
       case 'result-history': store.viewHistoryAfterResult(); break;
       case 'new-batch': store.newBatch(); break;
+      // Recuperación individual
+      case 'individual-prepare': store.individual.prepare(); break;
+      case 'individual-decision': store.individual.decide(el.getAttribute('data-value')); break;
+      case 'individual-confirm': store.individual.confirm(); break;
+      case 'individual-check': store.individual.check(); break;
+      case 'individual-reset': store.individual.reset(); break;
       // Conciliación
       case 'cancel-scope': store.cancelScope(); break;
       case 'recon-retry': store.recon.retry(id); break;
@@ -177,6 +184,9 @@
       case 'recon-status': store.recon.setFilter('status', el.value); break;
       case 'recon-chat': store.recon.setFilter('chat', el.value); break;
       case 'recon-toggle': store.recon.toggleRow(key, el.checked); break;
+      case 'individual-item': store.individual.selectItem(el.value); break;
+      case 'individual-chat': store.individual.selectChat(el.value); break;
+      case 'individual-ack': store.individual.setAck(el.checked); break;
     }
   });
 
@@ -186,10 +196,12 @@
     var a = el.getAttribute('data-action');
     if (a === 'filter-q') store.setLibraryFilter('query', el.value);
     else if (a === 'recon-q') store.recon.setFilter('query', el.value);
+    else if (a === 'individual-q') store.individual.search(el.value);
   });
 
   document.addEventListener('submit', function (ev) {
     ev.preventDefault();
+    if (ev.target.id === 'individual-form') { store.individual.prepare(); return; }
     if (ev.target.id === 'recon-form') { store.recon.startRun(); return; }
     if (ev.target.id === 'recon-hf-form') { store.recon.saveHistory(false); return; }
     if (ev.target.id !== 'login-form') return;
@@ -217,7 +229,7 @@
 
   // Protección: no cerrar la pestaña a mitad de un envío
   window.addEventListener('beforeunload', function (ev) {
-    if (store.state.confirm.busy) { ev.preventDefault(); ev.returnValue = ''; }
+    if (store.state.confirm.busy || (store.state.individual && store.state.individual.busy)) { ev.preventDefault(); ev.returnValue = ''; }
   });
 
   store.init();

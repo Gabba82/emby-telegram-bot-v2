@@ -436,7 +436,7 @@ class TestConfirmacionIdempotente:
             db.execute("UPDATE panel_batches SET status='executing' WHERE id=?", (plan["batch_id"],))
         resp = confirm(client, token, plan["batch_id"], accept_duplicate_risk=True)
         assert resp.status_code == 409
-        assert resp.get_json()["error"] == "batch_unavailable"
+        assert resp.get_json()["error"] == "in_progress"
 
     def test_stale_plan_detecta_cambio_de_estado(self, admin):
         """Un plan con accion 'retry' sobre una entrega que ya es 'sent' no reintenta."""
@@ -956,6 +956,7 @@ class TestSoloLectura:
         NO envian publicaciones: config fija la fecha de inicio conocida, runs solo
         LEE la biblioteca y prepare devuelve un plan del motor003 sin ejecutarlo.
         EMBY-005 v0.5.2 añade el POST de alias, que solo modifica presentación.
+        EMBY-005 v0.5.3 añade la preparación 1×1, que tampoco publica.
         El unico que envia es /api/batches/<batch_id>/confirm.
         """
         writes = set()
@@ -970,6 +971,7 @@ class TestSoloLectura:
             ("/api/logout", ("POST",)),
             ("/api/chats/<chat_id>/alias", ("POST",)),
             ("/api/prepare", ("POST",)),
+            ("/api/individual-recovery/prepare", ("POST",)),
             ("/api/batches/<batch_id>/confirm", ("POST",)),
             ("/api/reconciliation/config", ("POST",)),
             ("/api/reconciliation/runs", ("POST",)),

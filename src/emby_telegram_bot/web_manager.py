@@ -25,8 +25,26 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
 
     def current_labels():
         return {chat['id']: chat['label'] for chat in current_chats()}
+
+    def result_summary(results):
+        counts=Counter(row.get('status') for row in results)
+        return {key:counts[key] for key in ('sent','failed','pending','uncertain','skipped')}
+
     with store.connection() as db:
         db.execute('CREATE TABLE IF NOT EXISTS panel_batches (id TEXT PRIMARY KEY, owner TEXT NOT NULL, plan TEXT NOT NULL, status TEXT NOT NULL, results TEXT, expires REAL NOT NULL)')
+        # A process can stop after claiming a batch and before completing it. Never
+        # replay such work automatically: preserve its partial trace as interrupted.
+        for row in db.execute("SELECT id,results FROM panel_batches WHERE status='executing'").fetchall():
+            try:
+                result=json.loads(row['results']) if row['results'] else {}
+            except (TypeError,ValueError):
+                result={}
+            result=dict(result) if isinstance(result,dict) else {}
+            result.setdefault('batch_id',row['id'])
+            result['status']='interrupted'
+            result['results']=result.get('results') if isinstance(result.get('results'),list) else []
+            result['summary']=result_summary(result['results'])
+            db.execute("UPDATE panel_batches SET status='interrupted',results=? WHERE id=?",(json.dumps(result),row['id']))
 
     def error(code, message, status=400):
         return jsonify(error=code, message=message), status
@@ -140,12 +158,13 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
     @admin
     def get_catalog():
         page = page_number()
-        items = catalog.list(request.args.get('query','')[:200])
+        individual=request.args.get('individual')=='1'
+        items = catalog.individual_list(request.args.get('query','')[:200]) if individual and hasattr(catalog,'individual_list') else catalog.list(request.args.get('query','')[:200])
         kind, chat, status = (request.args.get(k,'') for k in ('kind','chat_id','status'))
         chat_list=current_chats()
         output = []
         for raw in items:
-            item = catalog.present(raw)
+            item = catalog.individual_present(raw) if individual and hasattr(catalog,'individual_present') else catalog.present(raw)
             item['states'] = {c['id']: store.item_status(item['id'], c['id']) for c in chat_list}
             if kind not in ('','all',item['kind']):
                 continue
@@ -207,7 +226,41 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         pairs=[(catalog.get(item_id),chat) for item_id in ids for chat in targets]
         return jsonify(build_plan(pairs,strategy,decisions))
 
-    def build_plan(pairs,strategy,decisions,scope=None):
+    def current_delivery(item_id,chat_id):
+        delivery=latest(item_id,chat_id)
+        if delivery is None:
+            return dict(state='history_unknown',delivery_id=None,last_attempt=None,updated_at=None,
+                        result='No existe historial local para este contenido y destino.')
+        attempts=store.attempts(delivery['id'])
+        attempt=attempts[-1] if attempts else None
+        return dict(state=delivery['status'],delivery_id=delivery['id'],message_id=delivery['message_id'],
+                    error_type=delivery['error_type'],updated_at=delivery['updated_at'],
+                    attempt_count=delivery['attempt_count'],last_attempt={k:attempt.get(k) for k in
+                    ('id','status','message_id','error_type','created_at','finished_at') if k in attempt} if attempt else None,
+                    result='Mensaje confirmado por Telegram.' if delivery['status']=='sent' else
+                    'El último intento falló y puede reintentarse.' if delivery['status']=='failed' else
+                    'La publicación puede haberse aceptado; reenviar podría duplicarla.' if delivery['status']=='uncertain' else
+                    'Todavía no consta un intento finalizado.')
+
+    @bp.post('/api/individual-recovery/prepare')
+    @admin
+    def individual_prepare():
+        labels=current_labels()
+        body=request.json
+        if set(body)-{'item_id','chat_id','decision'}:
+            raise ValueError()
+        item_id,chat_id,decision=body.get('item_id'),body.get('chat_id'),body.get('decision')
+        if not isinstance(item_id,str) or not isinstance(chat_id,str) or chat_id not in labels or decision not in (None,'send','skip'):
+            raise ValueError()
+        decisions={} if decision is None else {item_id+'|'+chat_id:decision}
+        plan=build_plan([(catalog.get(item_id),chat_id)],'recover',decisions,flow='individual')
+        plan['current']=current_delivery(item_id,chat_id)
+        # Persist the enriched plan so a refresh shows the same audited preview.
+        with store.connection() as db:
+            db.execute('UPDATE panel_batches SET plan=? WHERE id=?',(json.dumps(plan),plan['batch_id']))
+        return jsonify(plan)
+
+    def build_plan(pairs,strategy,decisions,scope=None,flow='batch'):
         labels=current_labels()
         rows=[]
         for item,chat in pairs:
@@ -235,7 +288,7 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         summary=dict(send=counts['send']+counts['retry'],skip=counts['skip'],decision=counts['decision'],duplicates=sum(r['duplicate_risk'] for r in rows))
         batch_id=secrets.token_urlsafe(24)
         expires=time.time()+900
-        plan=dict(batch_id=batch_id,status='prepared',mode=strategy,expires_at=expires,rows=rows,summary=summary,can_confirm=not counts['decision'] and summary['send']>0 and all(r['caption_valid'] for r in rows if r['action'] in ('send','retry')))
+        plan=dict(batch_id=batch_id,status='prepared',mode=strategy,flow=flow,expires_at=expires,rows=rows,summary=summary,can_confirm=not counts['decision'] and summary['send']>0 and all(r['caption_valid'] for r in rows if r['action'] in ('send','retry')))
         if scope:plan['scope']=scope
         with store.connection() as db:
             db.execute('INSERT INTO panel_batches VALUES (?,?,?, ?,NULL,?)',(batch_id,session['owner'],json.dumps(plan), 'prepared',expires))
@@ -267,9 +320,12 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         row,err=batch(batch_id)
         if err:return err
         if row['status']=='completed':return jsonify(json.loads(row['results']))
+        if row['status']=='executing':return error('in_progress','La operación ya está en curso. Consulta su resultado antes de repetirla.',409)
         plan=json.loads(row['plan'])
         if row['status']!='prepared' or row['expires']<time.time():
-            return error('batch_unavailable','Consulta el historial y prepara un lote nuevo.',409)
+            return error('batch_unavailable','La operación ya no se puede confirmar. Consulta su resultado y prepara una nueva.',409)
+        if plan.get('flow')=='individual' and (plan.get('mode')!='recover' or len(plan.get('rows',[]))!=1):
+            return error('invalid_individual_operation','La recuperación individual debe contener exactamente un contenido y un destino.',409)
         if request.json.get('confirm') is not True or not plan['can_confirm'] or (plan['summary']['duplicates'] and request.json.get('accept_duplicate_risk') is not True):
             return error('confirmation_required','Confirma las decisiones y el riesgo de duplicados.',409)
         if plan.get('scope'):
@@ -280,11 +336,11 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         for r in plan['rows']:
             if r['action']=='retry' and store.get(r['delivery_id'])['status']=='uncertain' and not r['explicit']:
                 return error('stale_plan','El estado cambió. Prepara el lote de nuevo.',409)
-        with store.connection() as db:
-            if db.execute("UPDATE panel_batches SET status='executing' WHERE id=? AND status='prepared'",(batch_id,)).rowcount!=1:
-                return error('in_progress','El lote ya está en curso.',409)
         results=[]
         result=dict(batch_id=batch_id,status='interrupted',results=results,summary={})
+        with store.connection() as db:
+            if db.execute("UPDATE panel_batches SET status='executing',results=? WHERE id=? AND status='prepared'",(json.dumps(result),batch_id)).rowcount!=1:
+                return error('in_progress','El lote ya está en curso.',409)
         try:
             for r in plan['rows']:
                 entry={k:r[k] for k in ('key','item_id','title','chat_id','chat_label','delivery_id')}
@@ -303,8 +359,7 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
                     db.execute('UPDATE panel_batches SET results=? WHERE id=?',(json.dumps(result),batch_id))
             result['status']='completed'
         finally:
-            counts=Counter(r['status'] for r in results)
-            result['summary']={k:counts[k] for k in ('sent','failed','pending','uncertain','skipped')}
+            result['summary']=result_summary(results)
             with store.connection() as db:
                 db.execute('UPDATE panel_batches SET status=?,results=? WHERE id=?',(result['status'],json.dumps(result),batch_id))
         return jsonify(result)
@@ -376,13 +431,21 @@ class EmbyCatalog:
     def list(self, query=''):
         items=self.emby.search_items(query,limit=60) if query else self.emby.get_recently_added_items(limit=60)
         return [i for i in items if i.get('Type') in ('Movie','Series')]
+    def individual_list(self,query=''):
+        items=self.emby.search_items(query,limit=60,include_item_types='Movie,Episode') if query else self.emby.get_library_page(start_index=0,limit=60,item_types=('Movie','Episode')).get('Items',[])
+        return [i for i in items if i.get('Type') in ('Movie','Episode')]
     def get(self,item_id):
         if not item_id or len(item_id)>100 or not all(c.isalnum() or c in '-_' for c in item_id):raise ValueError()
         item=self.emby.get_item_by_id(item_id)
-        if not item or item.get('Type') not in ('Movie','Series'):raise ValueError()
+        if not item or item.get('Type') not in ('Movie','Series','Episode'):raise ValueError()
         return item
     def present(self,item):
         return dict(id=str(item['Id']),title=item.get('Name','Contenido'),kind='movie' if item['Type']=='Movie' else 'series',year=item.get('ProductionYear'),overview=item.get('Overview',''),image_url='/api/artwork/'+str(item['Id']))
+    def individual_present(self,item):
+        episode=item.get('Type')=='Episode'
+        season=item.get('ParentIndexNumber');number=item.get('IndexNumber')
+        prefix=(item.get('SeriesName','Serie')+' · '+(('T'+str(season)) if season is not None else '')+(('E'+str(number).zfill(2)) if number is not None else '')+' · ') if episode else ''
+        return dict(id=str(item['Id']),title=prefix+item.get('Name','Contenido'),kind='episode' if episode else 'movie',year=item.get('ProductionYear'),overview=item.get('Overview',''),image_url='/api/artwork/'+str(item['Id']))
     def caption(self,item):
         from .formatting import build_search_item_caption
         return build_search_item_caption(item)

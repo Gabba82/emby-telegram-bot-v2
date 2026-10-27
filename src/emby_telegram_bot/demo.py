@@ -29,12 +29,19 @@ class DemoCatalog:
         return dict(Items=page,TotalRecordCount=len(items))
     def list(self,query=''):
         return [i for i in self.items if query.casefold() in i['Name'].casefold()]
+    def individual_list(self,query=''):
+        items=[i for i in self.items if i['Type']=='Movie']+[i for i in self.reconciliation_items() if i['Type']=='Episode']
+        return [i for i in items if query.casefold() in (i.get('Name','')+' '+i.get('SeriesName','')).casefold()]
     def get(self,item_id):
         return next((i.copy() for i in self.items+self.reconciliation_items() if i['Id']==item_id),None) or self.missing()
     def missing(self):
         raise ValueError('Contenido no disponible')
     def present(self,item):
         return dict(id=item['Id'],title=item['Name'],kind='movie' if item['Type']=='Movie' else 'series',year=item['ProductionYear'],overview=item['Overview'],image_url='/api/artwork/'+item['Id'])
+    def individual_present(self,item):
+        episode=item['Type']=='Episode'
+        title=(item.get('SeriesName','Serie')+' · T'+str(item.get('ParentIndexNumber',''))+'E'+str(item.get('IndexNumber','')).zfill(2)+' · ' if episode else '')+item['Name']
+        return dict(id=item['Id'],title=title,kind='episode' if episode else 'movie',year=item.get('ProductionYear'),overview=item.get('Overview',''),image_url='/api/artwork/'+item['Id'])
     def caption(self,item):
         return item['Name']+'\n'+('Película' if item['Type']=='Movie' else ('Episodio '+str(item.get('IndexNumber','')) if item['Type']=='Episode' else 'Serie'))+'\n\n[DEMO · publicación simulada]'
     def artwork(self,item_id):
