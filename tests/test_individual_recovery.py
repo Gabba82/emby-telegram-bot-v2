@@ -57,7 +57,7 @@ def test_sent_is_visible_and_cannot_be_resent(admin,app):
 
 
 @pytest.mark.parametrize(('item_id','chat_id','state','action'),[
-    ('s1','demo-series','pending','retry'),
+    ('e3','demo-cine','pending','retry'),
     ('m2','demo-series','failed','retry'),
     ('m3','demo-private','uncertain','decision'),
     ('m4','demo-cine','history_unknown','decision'),
@@ -131,6 +131,33 @@ def test_endpoint_enforces_auth_csrf_destination_and_one_by_one(admin,app):
     assert response.status_code==400
 
 
+@pytest.mark.parametrize('unsupported_type',['Series','Playlist','BoxSet','Audio'])
+def test_direct_api_rejects_unsupported_types_without_persisting_plan_or_delivery(admin,app,monkeypatch,unsupported_type):
+    client,token=admin
+    store=app.extensions['delivery_store']
+    catalog=app.extensions['demo_catalog']
+    original=catalog.get
+    item_id='s1' if unsupported_type=='Series' else 'unsupported-'+unsupported_type.lower()
+    if unsupported_type!='Series':
+        monkeypatch.setattr(catalog,'get',lambda value: {
+            'Id':value,'Name':'No admitido','Type':unsupported_type
+        } if value==item_id else original(value))
+    with store.connection() as db:
+        before=(db.execute('SELECT count(*) FROM panel_batches').fetchone()[0],
+                db.execute('SELECT count(*) FROM operations').fetchone()[0],
+                db.execute('SELECT count(*) FROM deliveries').fetchone()[0],
+                db.execute('SELECT count(*) FROM attempts').fetchone()[0])
+    response=prepare(client,token,item_id,'demo-cine')
+    assert response.status_code==400
+    assert response.get_json()['error']=='invalid_request'
+    with store.connection() as db:
+        after=(db.execute('SELECT count(*) FROM panel_batches').fetchone()[0],
+               db.execute('SELECT count(*) FROM operations').fetchone()[0],
+               db.execute('SELECT count(*) FROM deliveries').fetchone()[0],
+               db.execute('SELECT count(*) FROM attempts').fetchone()[0])
+    assert after==before
+
+
 def test_individual_catalog_contains_movies_and_episodes_but_not_series(admin):
     client,_=admin
     body=client.get('/api/catalog?individual=1&page=1').get_json()
@@ -168,6 +195,37 @@ def test_simultaneous_confirmation_allows_one_executor(admin,app,monkeypatch):
     assert competing.status_code==409
     assert competing.get_json()['error']=='in_progress'
     assert len(output)==1 and output[0].status_code==200
+
+
+def test_unknown_plan_becomes_stale_if_delivery_appears_before_confirmation(admin,app):
+    client,token=admin
+    plan=prepare(client,token,'m4','demo-cine','send').get_json()
+    catalog=app.extensions['demo_catalog'];publications=app.extensions['publications']
+    item=catalog.get('m4')
+    created=publications.prepare(item,catalog.caption(item),['demo-cine'],'concurrent-intent','automatic')
+    assert created[0]['status']=='pending'
+    attempts_before=len(app.extensions['delivery_store'].attempts(created[0]['id']))
+    response=post(client,f"/api/batches/{plan['batch_id']}/confirm",
+                  {'confirm':True,'accept_duplicate_risk':True},token)
+    assert response.status_code==409
+    assert response.get_json()['error']=='stale_plan'
+    assert len(app.extensions['delivery_store'].attempts(created[0]['id']))==attempts_before==0
+    saved=client.get(f"/api/batches/{plan['batch_id']}").get_json()
+    assert saved['status']=='interrupted' and saved['error']=='stale_plan'
+
+
+def test_plan_is_skipped_if_delivery_was_confirmed_before_confirmation(admin,app):
+    client,token=admin
+    plan=prepare(client,token,'m4','demo-cine','send').get_json()
+    catalog=app.extensions['demo_catalog'];publications=app.extensions['publications']
+    item=catalog.get('m4')
+    sent=publications.publish(item,catalog.caption(item),['demo-cine'],'concurrent-sent','automatic')[0]
+    assert sent['status']=='sent'
+    response=post(client,f"/api/batches/{plan['batch_id']}/confirm",
+                  {'confirm':True,'accept_duplicate_risk':True},token)
+    assert response.status_code==200
+    assert response.get_json()['results'][0]['status']=='skipped'
+    assert len(app.extensions['delivery_store'].attempts(sent['id']))==1
 
 
 def test_restart_marks_executing_operation_interrupted_and_preserves_trace(tmp_path):

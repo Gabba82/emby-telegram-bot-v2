@@ -252,8 +252,11 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
         item_id,chat_id,decision=body.get('item_id'),body.get('chat_id'),body.get('decision')
         if not isinstance(item_id,str) or not isinstance(chat_id,str) or chat_id not in labels or decision not in (None,'send','skip'):
             raise ValueError()
+        item=catalog.get(item_id)
+        if item.get('Type') not in ('Movie','Episode'):
+            raise ValueError()
         decisions={} if decision is None else {item_id+'|'+chat_id:decision}
-        plan=build_plan([(catalog.get(item_id),chat_id)],'recover',decisions,flow='individual')
+        plan=build_plan([(item,chat_id)],'recover',decisions,flow='individual')
         plan['current']=current_delivery(item_id,chat_id)
         # Persist the enriched plan so a refresh shows the same audited preview.
         with store.connection() as db:
@@ -332,10 +335,6 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
             record=reconciliation.get(plan['scope']['run_id'])
             if not record or reconciliation.config()['history_from']!=record['run']['scope']['history_from']:
                 return error('stale_scope','El ámbito del historial ha cambiado. Repite la conciliación.',409)
-        # A preview cannot authorize a newly uncertain delivery.
-        for r in plan['rows']:
-            if r['action']=='retry' and store.get(r['delivery_id'])['status']=='uncertain' and not r['explicit']:
-                return error('stale_plan','El estado cambió. Prepara el lote de nuevo.',409)
         results=[]
         result=dict(batch_id=batch_id,status='interrupted',results=results,summary={})
         with store.connection() as db:
@@ -348,6 +347,11 @@ def register_manager(app, store, publications, catalog, chats, *, password, mode
                 if r['action']=='skip' or (plan['mode']=='recover' and current and current['status']=='sent'):
                     entry.update(status='skipped',message_id=None,error_type=None)
                 else:
+                    current_state=current['status'] if current else 'history_unknown'
+                    same_delivery=(r['action']!='retry' or (current and current['id']==r['delivery_id']))
+                    if current_state!=r['state'] or not same_delivery:
+                        result['error']='stale_plan'
+                        return error('stale_plan','El estado cambió después de preparar la vista previa. Consulta el resultado y prepara una operación nueva.',409)
                     key='panel:'+batch_id+':'+r['key']
                     if r['action']=='retry':
                         delivery=publications.retry(r['delivery_id'],key,allow_uncertain=r['explicit'])

@@ -14,8 +14,8 @@ Revisión derivada de `main` (`977fcfd`) para añadir recuperación individual s
 
 Validación local de esta revisión:
 
-- **329 pruebas Python aprobadas** y 6 omitidas. Las omitidas son pruebas preexistentes del cliente Telegram (cuatro casos de error individual, cierre del SDK y respuesta vacía) cuyo bucle `asyncio` es interceptado por el bloqueo de sockets en Windows/Python 3.13; ninguna prueba nueva fue omitida.
-- Las pruebas nuevas cubren enviado, pendiente, fallido, incierto, desconocido, asociación contenido/destino, CSRF/autenticación, envíos desactivados, caducidad, repetición, confirmación concurrente y reinicio durante una operación.
+- **335 pruebas Python aprobadas** y 6 omitidas. Las omitidas son pruebas preexistentes del cliente Telegram (cuatro casos de error individual, cierre del SDK y respuesta vacía) cuyo bucle `asyncio` es interceptado por el bloqueo de sockets en Windows/Python 3.13; ninguna prueba nueva fue omitida.
+- Las pruebas nuevas cubren enviado, pendiente, fallido, incierto, desconocido, rechazo directo de `Series` y otros tipos, asociación contenido/destino, revalidación de planes obsoletos, CSRF/autenticación, envíos desactivados, caducidad, repetición, confirmación concurrente y reinicio durante una operación.
 - Compilación Python, sintaxis de todos los módulos JavaScript y comprobación de espacios del diff aprobadas.
 - Los tres YAML de Compose se analizaron correctamente y se verificó `PANEL_ALLOW_SENDS=false`.
 - Docker no está instalado en este equipo: no se ejecutaron `docker compose config`, builds ni contenedores.
