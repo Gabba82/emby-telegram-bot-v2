@@ -1,6 +1,27 @@
-# Notas de la versión — EMBY-005 (0.5.2, propuesta)
+# Notas de la versión — EMBY-005 (0.5.3, propuesta)
 
-Revisión derivada de `main` (`b2e2086`) para mejorar los destinos del panel. La versión `0.5.2` es una **propuesta**: no hay etiqueta ni release publicados, la PR no se fusiona automáticamente y no se despliega en Monster.
+Revisión derivada de `main` (`977fcfd`) para añadir recuperación individual segura. La versión `0.5.3` es una **propuesta**: no hay etiqueta ni release publicados, la PR no se fusiona automáticamente y no se despliega en Monster.
+
+## Cambios 0.5.3
+
+- Nueva pestaña **Recuperación individual**, separada de los lotes: el servidor valida exactamente un contenido y un destino.
+- Catálogo específico de películas y episodios, con búsqueda y nombres/alias de destino sin sustituir nunca el ID interno.
+- Estado actual, último intento, fecha, resultado y vista previa congelada antes de confirmar.
+- Los estados enviados quedan bloqueados. Pendientes y fallidos pueden reintentarse; inciertos y desconocidos exigen aceptar explícitamente el riesgo de duplicación.
+- El motor existente conserva la caducidad de 15 minutos, propiedad de sesión, confirmación, exclusión mutua y claves idempotentes.
+- Tras reiniciar, un lote que estuviera `executing` se registra como `interrupted`, conserva sus resultados parciales y no se reanuda solo.
+- Paquete, Compose e imágenes pasan a `0.5.3`; `PANEL_ALLOW_SENDS=false` permanece como valor predeterminado.
+
+Validación local de esta revisión:
+
+- **335 pruebas Python aprobadas** y 6 omitidas. Las omitidas son pruebas preexistentes del cliente Telegram (cuatro casos de error individual, cierre del SDK y respuesta vacía) cuyo bucle `asyncio` es interceptado por el bloqueo de sockets en Windows/Python 3.13; ninguna prueba nueva fue omitida.
+- Las pruebas nuevas cubren enviado, pendiente, fallido, incierto, desconocido, rechazo directo de `Series` y otros tipos, asociación contenido/destino, revalidación de planes obsoletos, CSRF/autenticación, envíos desactivados, caducidad, repetición, confirmación concurrente y reinicio durante una operación.
+- Compilación Python, sintaxis de todos los módulos JavaScript y comprobación de espacios del diff aprobadas.
+- Los tres YAML de Compose se analizaron correctamente y se verificó `PANEL_ALLOW_SENDS=false`.
+- Docker no está instalado en este equipo: no se ejecutaron `docker compose config`, builds ni contenedores.
+- `playwright-core` y Chromium no están disponibles: se añadió el recorrido de navegador de recuperación individual, pero no se ejecutó localmente.
+
+Toda la suite usa dobles locales y bloqueo de red; no se publicaron mensajes reales ni se usaron credenciales reales.
 
 ## Cambios 0.5.2
 

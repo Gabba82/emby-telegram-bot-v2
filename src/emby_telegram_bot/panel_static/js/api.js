@@ -112,9 +112,11 @@
     chats: function () { return request('GET', '/chats').then(function (d) { return expectArray(d, 'chats'); }); },
     setChatAlias: function (id, alias) { return request('POST', '/chats/' + encodeURIComponent(id) + '/alias', { alias: alias }); },
     catalog: function (p) { return request('GET', '/catalog' + qs(p)).then(function (d) { return expectArray(d, 'items'); }); },
+    individualCatalog: function (p) { p=Object.assign({},p,{individual:1}); return request('GET', '/catalog' + qs(p)).then(function (d) { return expectArray(d, 'items'); }); },
     history: function (p) { return request('GET', '/history' + qs(p)).then(function (d) { return expectArray(d, 'items'); }); },
     delivery: function (id) { return request('GET', '/deliveries/' + encodeURIComponent(id)).then(function (d) { return expectArray(d, 'attempts'); }); },
     prepare: function (payload) { return request('POST', '/prepare', payload).then(function (d) { return expectArray(d, 'rows'); }); },
+    individualPrepare: function (payload) { return request('POST', '/individual-recovery/prepare', payload).then(function (d) { return expectArray(d, 'rows'); }); },
     confirm: function (batchId, acceptDuplicateRisk) {
       return request('POST', '/batches/' + encodeURIComponent(batchId) + '/confirm', { confirm: true, accept_duplicate_risk: !!acceptDuplicateRisk });
     },

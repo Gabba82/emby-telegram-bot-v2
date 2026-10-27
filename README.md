@@ -47,6 +47,7 @@ Las capturas son de la **demostración local con datos ficticios**; en ellas no 
 
 - **Sin envíos sin confirmación.** El panel prepara un plan (válido 15 minutos) y solo ejecuta tras confirmar; los envíos manuales se pueden desactivar con `PANEL_ALLOW_SENDS=false` (valor por defecto).
 - **Lo ya enviado no se duplica.** Al recuperar, los pares con envío confirmado se omiten.
+- **Recuperación individual estricta.** La pestaña dedicada admite exactamente una película o episodio y un destino, muestra la evidencia disponible y conserva el resultado en SQLite.
 - **Lo incierto nunca se resuelve solo.** Un intento sin confirmación fiable (`incierto`) o sin historial exige una decisión explícita («Enviar igualmente» / «Omitir»).
 - **La conciliación no presume omisiones.** Solo marca «posible omisión» dentro del período registrado y con lectura completa; si la lectura de Emby es incompleta, el resultado es «historial desconocido».
 

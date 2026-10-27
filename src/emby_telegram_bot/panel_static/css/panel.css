@@ -256,6 +256,8 @@ main:focus, h2:focus { outline: none; }
 .alert { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); display: grid; gap: 4px; }
 .alert--warn { border-color: #8a6414; background: rgba(255, 176, 32, .09); }
 .alert--ok { border-color: #3d6b46; background: rgba(127, 214, 143, .07); }
+.checkline { display: flex; gap: 10px; align-items: flex-start; line-height: 1.4; }
+.checkline input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
 .alert--info { border-color: #4a5a78; background: rgba(134, 197, 255, .07); }
 .alert .btn-row { margin-top: 4px; }
 

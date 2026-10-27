@@ -2,6 +2,21 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.5.3] — EMBY-005 (propuesta, sin despliegue)
+
+### Añadido
+
+- Recuperación individual separada del flujo masivo: exactamente una película o episodio y un destino por operación.
+- Vista del estado actual, último intento, fecha, resultado y mensaje que se publicaría antes de confirmar.
+- Decisión expresa para historial incierto o desconocido, confirmación final y consulta del resultado persistido.
+
+### Seguridad y compatibilidad
+
+- Los envíos confirmados se omiten automáticamente; caducidad, propiedad de sesión, CSRF, exclusión mutua e idempotencia reutilizan el motor de lotes existente.
+- Las operaciones que estaban ejecutándose al reiniciar pasan a `interrupted` conservando resultados parciales y nunca se reanudan automáticamente.
+- No cambia el esquema SQLite (`PRAGMA user_version=1`), los destinatarios, el formato de mensaje, los webhooks, puertos ni el valor seguro `PANEL_ALLOW_SENDS=false`.
+- Imágenes de producción y demostración actualizadas a `0.5.3`.
+
 ## [0.5.2] — EMBY-005 (propuesta, sin despliegue)
 
 ### Añadido

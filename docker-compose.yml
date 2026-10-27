@@ -25,12 +25,12 @@ services:
   # Produccion: requiere un .env real con TELEGRAM_TOKEN/EMBY_API_KEY/CHAT_IDS #
   # ------------------------------------------------------------------ #
   app:
-    image: ${APP_IMAGE:-emby-telegram-bot-v2:0.5.2}
+    image: ${APP_IMAGE:-emby-telegram-bot-v2:0.5.3}
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        APP_VERSION: "0.5.2"
+        APP_VERSION: "0.5.3"
     profiles: ["production"]
     restart: unless-stopped
     env_file:
@@ -62,12 +62,12 @@ services:
   # network_mode: none.                                                     #
   # ------------------------------------------------------------------ #
   demo:
-    image: ${DEMO_IMAGE:-emby-telegram-bot-v2:0.5.2-demo}
+    image: ${DEMO_IMAGE:-emby-telegram-bot-v2:0.5.3-demo}
     build:
       context: .
       dockerfile: Dockerfile.demo
       args:
-        APP_VERSION: "0.5.2-demo"
+        APP_VERSION: "0.5.3-demo"
     profiles: ["demo"]
     restart: unless-stopped
     env_file: []          # deliberadamente vacio: la demo no hereda .env

@@ -497,6 +497,7 @@
     if (st.boot !== 'ready') return boot(store);
     if (!st.session.authenticated) return login(store);
     if (st.view === 'reconciliation' && root.EmbyRecon) return root.EmbyRecon.view(store);
+    if (st.view === 'individual' && root.EmbyIndividual) return root.EmbyIndividual.view(store);
     return st.view === 'history' ? historyView(store) : st.view === 'send' ? send(store) : library(store);
   }
 
