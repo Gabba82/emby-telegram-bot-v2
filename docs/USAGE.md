@@ -162,7 +162,7 @@ Cada fila tiene **Ver detalle**. La lectura se marca **incompleta** si Emby fall
 
 ## 8. Webhook de Telegram y HTTPS
 
-Telegram necesita una URL pública con HTTPS. Pon el servicio (puerto `8081`) detrás de un proxy inverso con TLS (Nginx Proxy Manager, Caddy, Nginx…), por ejemplo `https://embybot.tudominio.org` → `http://IP_DEL_SERVIDOR:8081`. No hacen falta rutas especiales para `/telegramhook` ni `/embyhook`. Comprueba desde fuera:
+Telegram necesita una URL pública con HTTPS. Pon el servicio (puerto `8081`) detrás de un proxy inverso con TLS (Nginx Proxy Manager, Caddy, Nginx…), por ejemplo `https://embybot.tudominio.org` → `http://127.0.0.1:8081` si el proxy corre en el host. El bind predeterminado es `APP_BIND=127.0.0.1`. Para un proxy en otro contenedor usa una red Docker compartida hacia `app:8081` o una IP de confianza explícita con firewall (ver `INSTALLATION.md`). Mantén la cabecera de secreto de Telegram; restringe específicamente `/embyhook`, que **no tiene autenticación propia**: HTTPS por sí solo no autoriza al emisor. Comprueba desde fuera:
 
 ```bash
 curl https://embybot.tudominio.org/health     # {"status":"ok"}

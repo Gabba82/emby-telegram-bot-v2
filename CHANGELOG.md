@@ -19,6 +19,8 @@ Consolida en una sola rama (`release/emby-005`) las fases EMBY-002, 003 y 004 so
 
 ### Cambiado
 
+- El puerto operativo se publica en `127.0.0.1` por defecto; `APP_BIND` conserva la selección explícita de interfaz. Documentada la protección de `/embyhook` por red/proxy y la conexión de proxies externos al host.
+
 - Las notificaciones automáticas de biblioteca y los envíos manuales pasan por el mismo servicio de publicación y quedan registrados en el historial.
 - `README.md` reorganizado: la instalación y la migración pasan a `docs/INSTALLATION.md` y `docs/MIGRATION.md`; el webhook de Telegram con HTTPS y el diagnóstico pasan a `docs/USAGE.md`.
 - Docker Compose con servicios `app` (perfil `production`) y `demo` (perfil `demo`), sin nombres fijos de contenedor ni volumen; la imagen incluye los ficheros estáticos del panel (`package_data`).

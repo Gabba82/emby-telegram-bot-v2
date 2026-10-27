@@ -44,7 +44,7 @@ services:
       - history-data:/data
     ports:
       # El panel usa cookie Secure: debe servirse detras de proxy inverso con HTTPS.
-      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8081}:8081"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8081}:8081"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health"]
       interval: 30s

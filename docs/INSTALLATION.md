@@ -31,6 +31,10 @@ con un error explicito.
 
 ## 2. Arranque
 
+El puerto publicado escucha por defecto en `127.0.0.1:8081` (`APP_BIND=127.0.0.1`). Un proxy ejecutado **en el host** puede reenviar a `http://127.0.0.1:8081`. Si Emby accede directamente desde otra máquina, configura explícitamente `APP_BIND=<IP-de-confianza-del-host>` y restringe el acceso con firewall/VPN. No uses `0.0.0.0` sin una protección equivalente.
+
+Un proxy en **otro contenedor** no alcanza el loopback del host: conéctalo mediante una red Docker compartida al servicio `app:8081`, o configura una IP de confianza explícita y reglas de firewall. El puerto interior del contenedor sigue siendo 8081. Mantén HTTPS y la cabecera de secreto para `/telegramhook`; **`/embyhook` carece de autenticación propia** y necesita protección de red o controles específicos del proxy, incluso si se sirve por HTTPS.
+
 ```bash
 docker compose --profile production up --build -d
 docker compose ps

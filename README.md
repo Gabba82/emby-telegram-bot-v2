@@ -62,6 +62,8 @@ docker compose --profile production up --build -d
 curl -fsS http://localhost:8081/health   # {"status":"ok"}
 ```
 
+El puerto se publica únicamente en `127.0.0.1` por defecto. `/embyhook` no tiene autenticación propia: si Emby o el proxy están fuera del host, revisa `APP_BIND` y la protección de red en [instalación](docs/INSTALLATION.md).
+
 El servicio `app` pertenece al perfil `production`: **sin `--profile production` no arranca**. Contenedor y volumen (`<proyecto>_history-data`) no tienen nombre fijo; Compose los deriva del directorio o de `COMPOSE_PROJECT_NAME`.
 
 Copia de seguridad del historial (en caliente) y restauración (con el servicio parado, `docker compose stop app`):

@@ -54,3 +54,15 @@ Alcance — qué **no** significan estos resultados:
 ## Documentación de la versión
 
 [`../README.md`](../README.md) · [`USAGE.md`](USAGE.md) · [`INSTALLATION.md`](INSTALLATION.md) · [`MIGRATION.md`](MIGRATION.md) · [`SECURITY.md`](SECURITY.md) · [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+
+## Cierre técnico — 2026-10-27
+
+Revisión basada en `dec0dbfac7127ed99a4b70da6b1afd3defa5ac80`, sin cambios concurrentes en la rama al iniciar.
+
+- Cambio mínimo: bind operativo `127.0.0.1` por defecto, sobrescribible con `APP_BIND`; actualización de plantilla y guías de webhooks/proxy. Autenticación y código de la aplicación sin cambios.
+- Docker Compose **v2.39.4**, ejecutado hoy sin daemon: seis configuraciones válidas (producción predeterminada, bind vacío, IP explícita con puerto alternativo, `0.0.0.0` explícito, demo local y smoke sin red ni puertos).
+- Suite completa ejecutada hoy: **310 passed en 62,21 s**. Incluye arranque de la factoría operativa con panel apagado/encendido y clientes Emby/Telegram simulados, webhooks, secreto Telegram, denegación de confirmación manual por defecto, persistencia tras recrear la aplicación y backup/restauración SQLite.
+- Las pruebas bloquean conexiones salientes y DNS; las llamadas de publicación solo alcanzan dobles en memoria. No se han publicado mensajes reales ni usado credenciales reales.
+- No se repitió Chromium: no hay cambios de interfaz. Los 147 checks previos siguen siendo antecedentes.
+- **No ejecutado hoy:** build de imagen ni arranque/restauración dentro de Docker, por ausencia de cliente/motor/socket Docker en este runtime. El binario independiente de Compose permite validar la configuración, pero no construir ni ejecutar contenedores. Los smokes Docker anteriores son antecedentes, no una verificación nueva de este cierre.
+- Antes de desplegar: reconstruir en un host aislado con Docker, verificar proxy/firewall y el acceso previsto de Emby, hacer backup y conservar imagen/Compose anteriores según `MIGRATION.md`. No se ha fusionado ni desplegado.

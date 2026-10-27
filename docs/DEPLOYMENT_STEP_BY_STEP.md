@@ -37,7 +37,7 @@ Sin `--profile production` Compose **no** arranca el servicio `app`. Para una se
 
 ## 5. Webhooks
 
-- **Emby** → URL `http://TU_HOST:8081/embyhook`, método `POST`. Esta ruta no usa secreto: protégela por red (red interna, VPN o lista de IP) o con una cabecera propia en tu proxy.
+- **Emby** → URL del proxy protegido, por ejemplo `https://TU_DOMINIO/embyhook`, método `POST`. Esta ruta no tiene autenticación propia. El bind predeterminado `127.0.0.1` permite un proxy en el host; para Emby remoto directo, fija `APP_BIND=<IP-de-confianza-del-host>` y aplica firewall/VPN. Un proxy en otro contenedor requiere una red Docker compartida o una interfaz de confianza explícita; consulta `INSTALLATION.md`.
 - **Telegram** → `/telegramhook` con HTTPS y, opcionalmente, `TELEGRAM_WEBHOOK_SECRET`. Los comandos `curl` de `setWebhook` están en [`USAGE.md`](USAGE.md#8-webhook-de-telegram-y-https).
 
 ## 6. Prueba
