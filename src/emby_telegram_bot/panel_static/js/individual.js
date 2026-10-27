@@ -62,14 +62,15 @@
     return '<section class="panel"><h3>Estado actual</h3><div class="toolbar">'+badge(c.state)+'<span class="muted">'+esc(c.result||'Sin resultado conocido.')+'</span></div>'+
       '<dl class="rdetail"><div><dt>Última actualización</dt><dd>'+esc(c.updated_at?H.fmtDateTime(c.updated_at):'Sin fecha conocida')+'</dd></div><div><dt>Último intento</dt><dd>'+esc(a?(LABEL[a.status]||a.status)+' · '+H.fmtDateTime(a.finished_at||a.created_at):'No consta')+'</dd></div><div><dt>Resultado</dt><dd>'+esc(c.message_id?'Mensaje '+c.message_id:(c.error_type||'Sin dato adicional'))+'</dd></div></dl></section>';
   }
-  function preview(row){return '<section class="panel"><h3>Vista previa exacta</h3><p class="muted">'+esc(row.title)+' → '+esc(row.chat_label)+' <span class="mono">'+esc(row.chat_id)+'</span></p><div class="tg"><div class="tg__bubble"><div class="tg__text">'+esc(row.preview).replace(/\n/g,'<br>')+'</div></div></div></section>';}
+  function preview(row,item){return '<section class="panel"><h3>Vista previa exacta</h3><p class="muted">'+esc(row.title)+' → '+esc(row.chat_label)+' <span class="mono">'+esc(row.chat_id)+'</span></p><div class="tg" role="group" aria-label="Vista previa del mensaje individual"><div class="tg__bubble"><div class="tg__cover">'+H.cover(item,'lg')+'</div><p class="tg__caption">'+esc(row.preview).replace(/\n/g,'<br>')+'</p><span class="tg__time">vista previa · no enviado</span></div></div></section>';}
   function planView(store){
     var i=store.state.individual,p=i.plan,row=p&&p.rows[0];if(!p||!row)return '';
+    var item=i.catalog.items.filter(function(x){return x.id===row.item_id;})[0]||{id:row.item_id,title:row.title,image_url:'/api/artwork/'+encodeURIComponent(row.item_id)};
     var decision='';
     if(row.action==='decision')decision='<div class="alert alert--warn"><b>Decisión explícita necesaria</b><p>El panel no puede demostrar que Telegram no lo recibió. Enviar podría crear un duplicado.</p><div class="btn-row"><button class="btn" type="button" data-action="individual-decision" data-value="skip">No enviar</button><button class="btn btn--danger" type="button" data-action="individual-decision" data-value="send">Asumir el riesgo y preparar</button></div></div>';
     else if(row.action==='skip')decision='<div class="alert alert--ok"><b>No se enviará</b><p>Ya existe una entrega confirmada o elegiste omitirla. La protección automática impide el reenvío.</p></div>';
-    var send=p.can_confirm?'<div class="alert '+(row.duplicate_risk?'alert--warn':'')+'"><label class="checkline"><input type="checkbox" data-action="individual-ack"'+(i.ack?' checked':'')+'> Confirmo este único contenido y este único destino'+(row.duplicate_risk?', y acepto el riesgo de duplicación':'')+'.</label><button type="button" class="btn btn--primary" data-action="individual-confirm"'+(!i.ack||!store.state.session.sends||i.busy?' disabled':'')+'>'+(i.busy?'Procesando…':'Confirmar recuperación')+'</button>'+(store.state.session.sends?'':'<p class="muted">Los envíos están bloqueados por PANEL_ALLOW_SENDS=false.</p>')+'</div>':'';
-    return current(p)+preview(row)+decision+send;
+    var send=p.can_confirm?'<div class="alert '+(row.duplicate_risk?'alert--warn':'')+'"><label class="checkline"><input type="checkbox" data-action="individual-ack"'+(i.ack?' checked':'')+'> Confirmo este único contenido y este único destino'+(row.duplicate_risk?', y acepto el riesgo de duplicación':'')+'.</label><button type="button" class="btn btn--primary" data-action="individual-confirm"'+(!i.ack||!store.state.session.sends||i.busy?' disabled':'')+'>'+(i.busy?'Procesando…':'Confirmar recuperación')+'</button></div>':'';
+    return current(p)+preview(row,item)+decision+send;
   }
   function resultView(i){
     if(!i.result)return '';
@@ -80,11 +81,14 @@
     var i=store.state.individual,chats=store.state.chats.list||[];
     var itemOpts=options(i.catalog.items,i.itemId,i.catalog.status==='loading'?'Buscando…':'Selecciona un contenido',function(x){return x.title+(x.year?' · '+x.year:'');});
     var chatOpts=options(chats,i.chatId,'Selecciona un destino',function(x){return store.chatOptionLabel(x.id);});
+    var selected=i.catalog.items.filter(function(x){return x.id===i.itemId;})[0];
+    var selectedView=selected?'<div class="individual-pick" aria-label="Contenido seleccionado">'+H.cover(selected,'individual')+'<div><b>'+esc(selected.title)+'</b><p class="muted">'+esc(selected.kind==='episode'?'Episodio':'Película')+(selected.year?' · '+esc(selected.year):'')+'</p></div></div>':'';
     var err=i.error?'<div class="alert alert--err" role="alert">'+esc(i.error)+(i.unknown&&i.plan?' <button type="button" class="btn btn--sm" data-action="individual-check">Consultar resultado</button>':'')+'</div>':'';
-    var empty=i.catalog.status==='ok'&&!i.catalog.items.length?'<p class="empty">No se encontraron películas, series o episodios con esa búsqueda.</p>':'';
+    var empty=i.catalog.status==='ok'&&!i.catalog.items.length?'<p class="empty">No se encontraron películas o episodios con esa búsqueda.</p>':'';
+    var lock=store.state.session.sends?'':'<div class="alert alert--warn individual-send-lock" role="status"><b>Envíos desactivados</b><p><code>PANEL_ALLOW_SENDS=false</code>. Puedes preparar y revisar la recuperación, pero no confirmarla.</p></div>';
     return '<header class="page-head"><h2>Recuperación individual</h2><p>Un contenido y un destino por operación. Este flujo no modifica ni reutiliza la recuperación masiva.</p></header>'+
-      '<form id="individual-form" class="panel rform"><h3>1. Selección</h3><label class="field"><span>Buscar contenido</span><input type="search" data-action="individual-q" data-fid="individual-q" value="'+esc(i.query)+'" placeholder="Título"></label>'+empty+
-      '<label class="field"><span>Película o episodio</span><select data-action="individual-item">'+itemOpts+'</select></label><label class="field"><span>Destino de Telegram</span><select data-action="individual-chat">'+chatOpts+'</select></label><p class="muted">El nombre es solo presentación; el envío conserva siempre el ID real.</p><button class="btn btn--primary" type="submit" data-action="individual-prepare"'+(!i.itemId||!i.chatId||i.busy?' disabled':'')+'>'+(i.busy?'Consultando…':'Preparar vista previa')+'</button></form>'+err+(i.result?'':planView(store))+resultView(i);
+      lock+'<form id="individual-form" class="panel rform"><h3>1. Selección</h3><label class="field"><span>Buscar contenido</span><input type="search" data-action="individual-q" data-fid="individual-q" value="'+esc(i.query)+'" placeholder="Título"></label>'+empty+
+      '<label class="field"><span>Película o episodio</span><select data-action="individual-item">'+itemOpts+'</select></label>'+selectedView+'<label class="field"><span>Destino de Telegram</span><select data-action="individual-chat">'+chatOpts+'</select></label><p class="muted">El nombre es solo presentación; el envío conserva siempre el ID real.</p><button class="btn btn--primary" type="submit" data-action="individual-prepare"'+(!i.itemId||!i.chatId||i.busy?' disabled':'')+'>'+(i.busy?'Consultando…':'Preparar vista previa')+'</button></form>'+err+(i.result?'':planView(store))+resultView(i);
   }
 
   root.EmbyIndividual={attach:attach,view:view};

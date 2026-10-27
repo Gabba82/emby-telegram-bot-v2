@@ -93,6 +93,7 @@
     var el = act(ev.target);
     if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'DETAILS') return;
     var a = el.getAttribute('data-action'), id = el.getAttribute('data-id');
+    if (a && a.indexOf('individual-') === 0) ev.preventDefault();
     switch (a) {
       case 'view': store.setView(el.getAttribute('data-view')); break;
       case 'logout': store.logout(); break;

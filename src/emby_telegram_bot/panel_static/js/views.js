@@ -455,7 +455,7 @@
 
   function tray(store) {
     var st = store.state;
-    if (!st.session.authenticated || st.view === 'send' || st.view === 'reconciliation') return '';
+    if (!st.session.authenticated || st.view === 'send' || st.view === 'reconciliation' || st.view === 'individual') return '';
     if (st.scope) {
       return '<div class="tray" role="region" aria-label="Lote exacto de conciliación"><p><b>Lote exacto de conciliación</b> · ' + plural(st.scope.keys.length, 'par', 'pares') + '</p>' +
         '<button type="button" class="btn btn--primary" data-action="view" data-view="send">Ver el lote</button></div>';
@@ -504,6 +504,6 @@
   root.EmbyViews = {
     esc: esc, main: main, tray: tray, confirmBody: confirmBody, banner: banner,
     // piezas comunes para módulos de vista (reconciliation.js)
-    h: { plural: plural, fmtDateTime: fmtDateTime, icon: icon, badge: badge, statusBadge: statusBadge, spinner: spinner, errorBlock: errorBlock, chatKind: chatKind }
+    h: { plural: plural, fmtDateTime: fmtDateTime, icon: icon, badge: badge, statusBadge: statusBadge, spinner: spinner, errorBlock: errorBlock, chatKind: chatKind, cover: cover }
   };
 })(self);

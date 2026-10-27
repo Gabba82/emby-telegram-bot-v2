@@ -7,6 +7,7 @@ import threading
 import pytest
 
 from emby_telegram_bot.demo import create_demo_app
+from emby_telegram_bot.telegram_client import SendResult
 
 
 PASSWORD = "emby-demo-003"
@@ -109,6 +110,29 @@ def test_confirmation_replay_returns_saved_result_without_another_attempt(admin,
     assert app.extensions['delivery_store'].attempts(delivery_id)[-1]['caption']==original_caption
 
 
+def test_enabled_confirmation_uses_existing_engine_with_artwork_text_and_idempotency(admin,app,monkeypatch):
+    client,token=admin
+    publications=app.extensions['publications']
+    image=b'fake-jpeg-bytes'
+    calls=[]
+    monkeypatch.setattr(publications,'image_loader',lambda item:image)
+
+    def fake_send(caption,sent_image,chat_ids):
+        calls.append((caption,sent_image,list(chat_ids)))
+        return [SendResult(chat_ids[0],'sent',4242)]
+
+    monkeypatch.setattr(publications.telegram,'send',fake_send)
+    plan=prepare(client,token,'m4','demo-cine','send').get_json()
+    path=f"/api/batches/{plan['batch_id']}/confirm"
+    first=post(client,path,{'confirm':True,'accept_duplicate_risk':True},token)
+    assert first.status_code==200
+    assert calls==[(plan['rows'][0]['caption'],image,['demo-cine'])]
+    assert first.get_json()['results'][0]['message_id']==4242
+    replay=post(client,path,{'confirm':True,'accept_duplicate_risk':True},token)
+    assert replay.status_code==200
+    assert calls==[(plan['rows'][0]['caption'],image,['demo-cine'])]
+
+
 def test_expired_operation_cannot_be_confirmed(admin,app):
     client,token=admin
     plan=prepare(client,token,'m2','demo-series').get_json()
@@ -166,6 +190,7 @@ def test_individual_catalog_contains_movies_and_episodes_but_not_series(admin):
     episode=next(item for item in body['items'] if item['kind']=='episode')
     assert episode['id'].startswith('e')
     assert 'T1E' in episode['title']
+    assert all(item['image_url']==f"/api/artwork/{item['id']}" for item in body['items'])
 
 
 def test_simultaneous_confirmation_allows_one_executor(admin,app,monkeypatch):
