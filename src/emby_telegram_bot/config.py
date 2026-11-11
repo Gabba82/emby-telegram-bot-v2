@@ -47,6 +47,9 @@ class Settings:
     chat_labels: dict[str, str] = field(default_factory=dict)
 
     history_db_path: str = "data/history.sqlite3"
+    moria_buffer_seconds: int = 120
+    moria_library_indicators: list[str] = field(default_factory=lambda: ["strm", "PalaEmby"])
+    enable_moria_batch: bool = True
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -71,6 +74,10 @@ class Settings:
         buffer_raw = os.getenv("EPISODE_BUFFER_SECONDS", "60").strip()
         library_debounce_raw = os.getenv("LIBRARY_DEBOUNCE_SECONDS", "120").strip()
         playback_debounce_raw = os.getenv("PLAYBACK_DEBOUNCE_SECONDS", "10").strip()
+        moria_buffer_raw = os.getenv("MORIA_BUFFER_SECONDS", "120").strip()
+        moria_indicators_raw = os.getenv("MORIA_LIBRARY_INDICATORS", "strm,PalaEmby").strip()
+        enable_moria_batch = _parse_bool(os.getenv("ENABLE_MORIA_BATCH", ""), True)
+        moria_library_indicators = [ind.strip() for ind in moria_indicators_raw.split(",") if ind.strip()]
         enable_library_notifications = _parse_bool(os.getenv("ENABLE_LIBRARY_NOTIFICATIONS", ""), True)
         enable_playback_notifications = _parse_bool(os.getenv("ENABLE_PLAYBACK_NOTIFICATIONS", ""), True)
         playback_notify_pause = _parse_bool(os.getenv("PLAYBACK_NOTIFY_PAUSE", ""), False)
@@ -87,16 +94,19 @@ class Settings:
             episode_buffer_seconds = int(buffer_raw)
             library_debounce_seconds = int(library_debounce_raw)
             playback_debounce_seconds = int(playback_debounce_raw)
+            moria_buffer_seconds = int(moria_buffer_raw)
         except ValueError as exc:
             raise ValueError(
-                "REQUEST_TIMEOUT_SECONDS, EPISODE_BUFFER_SECONDS, LIBRARY_DEBOUNCE_SECONDS "
-                "and PLAYBACK_DEBOUNCE_SECONDS must be integers"
+                "REQUEST_TIMEOUT_SECONDS, EPISODE_BUFFER_SECONDS, LIBRARY_DEBOUNCE_SECONDS, "
+                "PLAYBACK_DEBOUNCE_SECONDS and MORIA_BUFFER_SECONDS must be integers"
             ) from exc
 
         if request_timeout_seconds <= 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than 0")
         if episode_buffer_seconds <= 0:
             raise ValueError("EPISODE_BUFFER_SECONDS must be greater than 0")
+        if moria_buffer_seconds <= 0:
+            raise ValueError("MORIA_BUFFER_SECONDS must be greater than 0")
         if library_debounce_seconds < 0:
             raise ValueError("LIBRARY_DEBOUNCE_SECONDS must be >= 0")
         if playback_debounce_seconds < 0:
@@ -131,4 +141,7 @@ class Settings:
             telegram_webhook_secret=telegram_webhook_secret,
             chat_labels=chat_labels,
             history_db_path=history_db_path,
+            moria_buffer_seconds=moria_buffer_seconds,
+            moria_library_indicators=moria_library_indicators,
+            enable_moria_batch=enable_moria_batch,
         )

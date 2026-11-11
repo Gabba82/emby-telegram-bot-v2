@@ -127,6 +127,14 @@ class _FakeTelegramClient:
     def send(self, caption: str, image_bytes, chat_ids=None) -> None:
         self.sent_media.append((caption, image_bytes, chat_ids))
 
+    def send_media_group(self, caption: str, images, chat_ids=None):
+        if not hasattr(self, "sent_media_groups"):
+            self.sent_media_groups = []
+        self.sent_media_groups.append((caption, images, chat_ids))
+        self.sent_media.append((caption, images[0] if images else None, chat_ids))
+        from emby_telegram_bot.telegram_client import SendResult
+        return [SendResult(cid, "sent", message_id=len(self.sent_media)) for cid in (chat_ids or ["-1001"])]
+
     def send_text(self, text: str, chat_ids=None, reply_markup=None) -> None:
         self.sent_texts.append((text, chat_ids))
 

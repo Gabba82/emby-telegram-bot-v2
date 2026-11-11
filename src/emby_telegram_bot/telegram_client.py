@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from telegram import Bot, BotCommand, BotCommandScopeChat, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, BotCommand, BotCommandScopeChat, ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 from telegram.error import BadRequest, Forbidden, InvalidToken, RetryAfter, ChatMigrated
@@ -85,6 +85,17 @@ class TelegramClient:
             return asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets))
         except Exception as exc:
             logging.error("Telegram batch send failed error_type=%s", type(exc).__name__)
+            return [error_result(chat_id, exc) for chat_id in targets]
+
+    def send_media_group(self, caption: str, images: list[bytes], chat_ids: list[str] | None = None) -> list[SendResult]:
+        targets = list(dict.fromkeys(chat_ids if chat_ids is not None else self._chat_ids))
+        if not targets:
+            return []
+        try:
+            formatted_caption, parse_mode = format_caption_for_telegram(caption)
+            return asyncio.run(self._send_media_group_all(formatted_caption, parse_mode, images, targets))
+        except Exception as exc:
+            logging.error("Telegram media group batch send failed error_type=%s", type(exc).__name__)
             return [error_result(chat_id, exc) for chat_id in targets]
 
     def validate_credentials(self) -> str:
@@ -286,6 +297,79 @@ class TelegramClient:
             completed = {r.chat_id for r in results}
             results.extend(error_result(cid, exc) for cid in targets if cid not in completed)
             logging.error("Telegram transport failed error_type=%s", type(exc).__name__)
+        return results
+
+    async def _send_media_group_all(
+        self,
+        formatted_caption: str,
+        parse_mode: str,
+        images: list[bytes],
+        targets: list[str],
+    ) -> list[SendResult]:
+        results = []
+        valid_images = [img for img in images if img]
+        caption_fits_in_media = len(formatted_caption) <= 1024
+        try:
+            async with Bot(token=self._token) as bot:
+                for chat_id in targets:
+                    try:
+                        if len(valid_images) >= 2:
+                            media_items = []
+                            for i, img in enumerate(valid_images[:10]):
+                                if i == 0 and caption_fits_in_media:
+                                    media_items.append(
+                                        InputMediaPhoto(
+                                            media=io.BytesIO(img),
+                                            caption=formatted_caption,
+                                            parse_mode=parse_mode,
+                                        )
+                                    )
+                                else:
+                                    media_items.append(InputMediaPhoto(media=io.BytesIO(img)))
+                            messages = await bot.send_media_group(chat_id=chat_id, media=media_items)
+                            first_msg_id = messages[0].message_id if messages else None
+                            if not caption_fits_in_media:
+                                text_msg = await bot.send_message(
+                                    chat_id=chat_id,
+                                    text=formatted_caption,
+                                    parse_mode=parse_mode,
+                                )
+                                first_msg_id = text_msg.message_id
+                            results.append(SendResult(chat_id, "sent", message_id=first_msg_id))
+                        elif len(valid_images) == 1:
+                            if caption_fits_in_media:
+                                msg = await bot.send_photo(
+                                    chat_id=chat_id,
+                                    photo=io.BytesIO(valid_images[0]),
+                                    caption=formatted_caption,
+                                    parse_mode=parse_mode,
+                                )
+                            else:
+                                await bot.send_photo(chat_id=chat_id, photo=io.BytesIO(valid_images[0]))
+                                msg = await bot.send_message(
+                                    chat_id=chat_id,
+                                    text=formatted_caption,
+                                    parse_mode=parse_mode,
+                                )
+                            results.append(SendResult(chat_id, "sent", message_id=msg.message_id))
+                        else:
+                            msg = await bot.send_message(
+                                chat_id=chat_id,
+                                text=formatted_caption,
+                                parse_mode=parse_mode,
+                            )
+                            results.append(SendResult(chat_id, "sent", message_id=msg.message_id))
+                    except Exception as exc:
+                        results.append(error_result(chat_id, exc))
+                        logging.error(
+                            "Telegram media group send failed chat_id=%s error_type=%s",
+                            chat_id,
+                            type(exc).__name__,
+                        )
+        except Exception as exc:
+            completed = {r.chat_id for r in results}
+            results.extend(error_result(cid, exc) for cid in targets if cid not in completed)
+            logging.error("Telegram media group transport failed error_type=%s", type(exc).__name__)
         return results
 
     async def _send_text_all(

@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.6.0] — Agrupación consolidada de novedades de Moria (PalaEmby)
+
+### Añadido
+- Agrupador por lotes para actualizaciones procedentes de Moria (`MoriaBatchAggregator`) configurable vía `MORIA_BUFFER_SECONDS` (por defecto 120s), `MORIA_LIBRARY_INDICATORS` (`strm,PalaEmby`) y `ENABLE_MORIA_BATCH` (`true`).
+- Generación de reportes consolidados para Películas (`build_moria_movies_reports`) y Series (`build_moria_series_reports`) con carátulas en álbum de fotos (`sendMediaGroup`), sinopsis desplegables y paginación limpia (`Parte X/Y`) si se supera el límite de 4.096 caracteres o 10 imágenes.
+- Soporte para envío de álbumes de fotos (`send_media_group`) en `TelegramClient`.
+- Registro de cada título individual en el historial persistente de SQLite (`deliveries`), asociando cada película o episodio al `message_id` del reporte consolidado para mantener al 100% la compatibilidad con el panel web y la conciliación.
+- Conservación total del flujo inmediato individual para contenidos locales y descargas de torrent.
+
 ## [0.5.3] — EMBY-005 (propuesta, sin despliegue)
 
 ### Añadido

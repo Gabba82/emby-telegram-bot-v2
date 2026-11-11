@@ -24,13 +24,17 @@ from .diagnostics import (
 )
 from .emby_client import EmbyClient
 from .episode_aggregator import EpisodeAggregator
+from .moria_aggregator import MoriaBatchAggregator
 from .formatting import (
     build_activity_caption,
     build_caption,
+    build_moria_movies_reports,
+    build_moria_series_reports,
     build_search_item_caption,
     build_search_results_message,
     infer_activity_event_code,
     is_activity_payload,
+    is_moria_item,
 )
 from .telegram_client import (
     ADMIN_DIAGNOSTICS_BUTTON_TEXT,
@@ -245,6 +249,22 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         items = sample_item.get("_notification_items") or [sample_item]
         with episode_send_lock:
             publications.publish_episode_group(items, library_targets, _automatic_key, _episode_caption)
+
+    moria_send_lock = threading.Lock()
+
+    def flush_moria_movies(movies: list[dict[str, Any]]) -> None:
+        reports = build_moria_movies_reports(movies)
+        with moria_send_lock:
+            publications.publish_moria_reports(
+                movies, reports, library_targets, _automatic_key, category="moria-movies"
+            )
+
+    def flush_moria_series(episodes: list[dict[str, Any]]) -> None:
+        reports = build_moria_series_reports(episodes)
+        with moria_send_lock:
+            publications.publish_moria_reports(
+                episodes, reports, library_targets, _automatic_key, category="moria-series"
+            )
 
     def _delivery_summary(rows):
         lines = ["Resultado por destino:"]
@@ -795,6 +815,12 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         flush_delay_seconds=settings.episode_buffer_seconds,
         flush_callback=flush_episode_group,
     )
+    moria_aggregator = MoriaBatchAggregator(
+        flush_delay_seconds=settings.moria_buffer_seconds,
+        flush_movies_callback=flush_moria_movies,
+        flush_series_callback=flush_moria_series,
+    )
+    app.extensions["moria_aggregator"] = moria_aggregator
 
     @app.get("/health")
     def health() -> tuple[dict[str, str], int]:
@@ -864,6 +890,14 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                 return "", 200
 
             item = _refresh_library_item(item, item_id)
+
+            if settings.enable_moria_batch and is_moria_item(item, settings.moria_library_indicators):
+                if item.get("Type") == "Movie":
+                    moria_aggregator.add_movie(item)
+                    return "", 200
+                if item.get("Type") == "Episode":
+                    moria_aggregator.add_episode(item)
+                    return "", 200
 
             if item.get("Type") == "Episode":
                 publications.prepare(item, _episode_caption([item]), library_targets, _automatic_key(item), "automatic")

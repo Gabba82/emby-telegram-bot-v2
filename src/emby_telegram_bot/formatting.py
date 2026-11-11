@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from datetime import datetime
@@ -701,3 +701,196 @@ def build_search_item_caption(
     if external_links:
         caption += f"\n\n{SECTION_DIVIDER}\n" + "\n".join(external_links)
     return _trim_caption(caption)
+
+
+def is_moria_item(item: dict[str, Any], indicators: list[str] | None = None) -> bool:
+    if not isinstance(item, dict):
+        return False
+    effective_indicators = [ind.lower() for ind in (indicators or ["strm", "palaemby"]) if ind]
+
+    # 1. Direct container check
+    container = str(item.get("Container") or "").lower()
+    if "strm" in container:
+        return True
+
+    # 2. Direct path check
+    path = str(item.get("Path") or "").lower()
+    if path.endswith(".strm"):
+        return True
+    for ind in effective_indicators:
+        if ind in path:
+            return True
+
+    # 3. MediaSources inspection
+    media_sources = item.get("MediaSources")
+    if isinstance(media_sources, list):
+        for ms in media_sources:
+            if not isinstance(ms, dict):
+                continue
+            ms_container = str(ms.get("Container") or "").lower()
+            if "strm" in ms_container:
+                return True
+            ms_path = str(ms.get("Path") or "").lower()
+            if ms_path.endswith(".strm"):
+                return True
+            for ind in effective_indicators:
+                if ind in ms_path:
+                    return True
+    return False
+
+
+def _format_moria_movie_entry(item: dict[str, Any]) -> str:
+    name = item.get("Name") or "Película sin título"
+    year = item.get("ProductionYear")
+    title_line = f"🍿 {name} ({year})" if year else f"🍿 {name}"
+
+    details = []
+    rating = _format_rating(item.get("CommunityRating"))
+    if rating:
+        details.append(f"⭐ {rating}/10")
+    genres = item.get("Genres")
+    if isinstance(genres, list) and genres:
+        details.append(", ".join(genres[:2]))
+    runtime_ticks = item.get("RunTimeTicks")
+    if runtime_ticks:
+        minutes = int(runtime_ticks // (10_000_000 * 60))
+        h, m = divmod(minutes, 60)
+        details.append(f"⏱️ {h}h {m}m" if h else f"⏱️ {m}m")
+
+    if details:
+        title_line += " · " + " · ".join(details)
+
+    overview = _first_str(item.get("Overview"))
+    if overview:
+        short = _short_overview(overview, max_length=250)
+        return f"{title_line}\nSinopsis:\n{_expandable_section(short)}"
+    return title_line
+
+
+def build_moria_movies_reports(
+    items: list[dict[str, Any]],
+    max_chars: int = 4000,
+    max_album_images: int = 10,
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    if not items:
+        return []
+
+    entries = [(_format_moria_movie_entry(item), item) for item in items]
+
+    batches: list[list[tuple[str, dict[str, Any]]]] = []
+    current_batch: list[tuple[str, dict[str, Any]]] = []
+    current_len = 0
+
+    header_base = "🎬 NUEVAS PELÍCULAS EN MORIA (PalaEmby)"
+    footer = f"\n{SECTION_DIVIDER}\nDisponibles en Emby para reproducir de inmediato."
+    reserved_overhead = 250
+
+    for entry_text, item in entries:
+        added_len = len(entry_text) + 2
+        if current_batch and (
+            current_len + added_len + reserved_overhead > max_chars
+            or len(current_batch) >= max_album_images
+        ):
+            batches.append(current_batch)
+            current_batch = [(entry_text, item)]
+            current_len = added_len
+        else:
+            current_batch.append((entry_text, item))
+            current_len += added_len
+
+    if current_batch:
+        batches.append(current_batch)
+
+    total_parts = len(batches)
+    reports = []
+    for index, batch in enumerate(batches, start=1):
+        batch_items = [item for _, item in batch]
+        if total_parts == 1:
+            header = f"{header_base} · {len(items)} {'película' if len(items) == 1 else 'películas'}\n{SECTION_DIVIDER}"
+        else:
+            header = f"{header_base} · Parte {index}/{total_parts} ({len(batch_items)} de {len(items)} películas)\n{SECTION_DIVIDER}"
+
+        body = "\n\n".join(entry_text for entry_text, _ in batch)
+        caption = f"{header}\n\n{body}\n{footer}"
+        reports.append((caption, batch_items))
+
+    return reports
+
+
+def _format_moria_series_entry(
+    series_name: str,
+    season_number: int,
+    episodes: list[int],
+    sample: dict[str, Any],
+) -> str:
+    title_line = f"🔹 {series_name} · Temporada {season_number}"
+    formatted_episodes = _format_episode_tags([f"S{season_number:02}E{ep:02}" for ep in sorted(set(episodes))])
+    ep_line = f"   🧩 Episodios añadidos: {formatted_episodes}"
+
+    overview = _first_str(sample.get("Overview"), sample.get("SeriesOverview"))
+    if overview and sample.get("Type") == "Series":
+        short = _short_overview(overview, max_length=250)
+        return f"{title_line}\n{ep_line}\n   Sinopsis:\n{_expandable_section(short)}"
+    return f"{title_line}\n{ep_line}"
+
+
+def build_moria_series_reports(
+    episodes: list[dict[str, Any]],
+    max_chars: int = 4000,
+    max_album_images: int = 10,
+) -> list[tuple[str, list[dict[str, Any]]]]:
+    if not episodes:
+        return []
+
+    groups: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for ep in episodes:
+        s_name = str(ep.get("SeriesName") or ep.get("Name") or "Serie")
+        s_season = int(ep.get("ParentIndexNumber") or 0)
+        groups.setdefault((s_name, s_season), []).append(ep)
+
+    entries = []
+    for (s_name, s_season), ep_list in groups.items():
+        ep_numbers = [int(e.get("IndexNumber") or 0) for e in ep_list]
+        sample = ep_list[0]
+        text = _format_moria_series_entry(s_name, s_season, ep_numbers, sample)
+        entries.append((text, sample))
+
+    batches: list[list[tuple[str, dict[str, Any]]]] = []
+    current_batch: list[tuple[str, dict[str, Any]]] = []
+    current_len = 0
+
+    header_base = "📺 NUEVAS SERIES Y TEMPORADAS EN MORIA (PalaEmby)"
+    footer = f"\n{SECTION_DIVIDER}\nDisponibles en Emby para reproducir de inmediato."
+    reserved_overhead = 250
+
+    for entry_text, sample in entries:
+        added_len = len(entry_text) + 2
+        if current_batch and (
+            current_len + added_len + reserved_overhead > max_chars
+            or len(current_batch) >= max_album_images
+        ):
+            batches.append(current_batch)
+            current_batch = [(entry_text, sample)]
+            current_len = added_len
+        else:
+            current_batch.append((entry_text, sample))
+            current_len += added_len
+
+    if current_batch:
+        batches.append(current_batch)
+
+    total_parts = len(batches)
+    total_series_count = len(entries)
+    reports = []
+    for index, batch in enumerate(batches, start=1):
+        batch_samples = [sample for _, sample in batch]
+        if total_parts == 1:
+            header = f"{header_base} · {total_series_count} {'serie actualizada' if total_series_count == 1 else 'series actualizadas'}\n{SECTION_DIVIDER}"
+        else:
+            header = f"{header_base} · Parte {index}/{total_parts} ({len(batch_samples)} de {total_series_count} series)\n{SECTION_DIVIDER}"
+
+        body = "\n\n".join(entry_text for entry_text, _ in batch)
+        caption = f"{header}\n\n{body}\n{footer}"
+        reports.append((caption, batch_samples))
+
+    return reports

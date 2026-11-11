@@ -74,3 +74,79 @@ class PublicationService:
                 # Serialized by the app's group lock; still atomically claimed in SQLite.
                 self._send(rows, caption_builder(pending_items), pending_items[-1], "episode-group",
                            caption_for_rows=lambda claimed: caption_builder([json.loads(r["item_json"]) for r in claimed]))
+
+    def publish_moria_reports(
+        self,
+        items: list[dict],
+        reports: list[tuple[str, list[dict]]],
+        targets: list[str],
+        key_for_item: Callable,
+        category: str = "moria-batch",
+    ) -> list[dict]:
+        prepared = [
+            (
+                item,
+                self.prepare(
+                    item,
+                    str(item.get("Name") or "Moria item"),
+                    targets,
+                    key_for_item(item),
+                    "automatic",
+                ),
+            )
+            for item in items
+        ]
+
+        all_results = []
+        for part_index, (report_caption, album_items) in enumerate(reports, start=1):
+            action_key = f"{category}:{part_index}"
+            images = []
+            for album_item in album_items:
+                try:
+                    img = self.image_loader(album_item)
+                    if img:
+                        images.append(img)
+                except Exception:
+                    pass
+
+            batch_item_ids = {str(i.get("Id")) for i in album_items if i.get("Id")}
+            relevant_items = [
+                (item, deliveries)
+                for item, deliveries in prepared
+                if (not batch_item_ids or str(item.get("Id")) in batch_item_ids or len(reports) == 1)
+            ]
+            if not relevant_items:
+                relevant_items = prepared
+
+            for chat_id in dict.fromkeys(targets):
+                claimed = []
+                for item, deliveries in relevant_items:
+                    for row in deliveries:
+                        if row["chat_id"] == chat_id and row["status"] == "pending":
+                            attempt = self.store.claim(row["id"], f"{action_key}:{row['id']}")
+                            if attempt is not None:
+                                claimed.append((attempt, row))
+
+                if not claimed:
+                    continue
+
+                for attempt, row in claimed:
+                    self.store.set_attempt_caption(attempt, report_caption)
+
+                try:
+                    if hasattr(self.telegram, "send_media_group"):
+                        results = self.telegram.send_media_group(report_caption, images, chat_ids=[chat_id])
+                    else:
+                        results = self.telegram.send(report_caption, images[0] if images else None, chat_ids=[chat_id])
+                    result = next(
+                        (r for r in (results or []) if r.chat_id == chat_id),
+                        SendResult(chat_id, "uncertain", error_type="MissingSendResult"),
+                    )
+                except Exception as exc:
+                    result = SendResult(chat_id, "uncertain", error_type=type(exc).__name__)
+
+                for attempt, row in claimed:
+                    self.store.finish(attempt, result.status, result.message_id, result.error_type)
+                    all_results.append(self.store.get(row["id"]))
+
+        return all_results
