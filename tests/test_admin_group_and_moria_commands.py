@@ -57,6 +57,7 @@ class _FakeTelegramClient:
         self.sent_texts = []
         self.resend_item_menus = []
         self.resend_target_menus = []
+        self.admin_menus = []
         self.callbacks = []
         _FakeTelegramClient.latest = self
 
@@ -70,6 +71,10 @@ class _FakeTelegramClient:
 
     def send_text(self, text: str, chat_ids=None, reply_markup=None) -> None:
         self.sent_texts.append((text, chat_ids))
+
+    def send_admin_menu(self, chat_id: str) -> None:
+        self.admin_menus.append(chat_id)
+        self.sent_texts.append(("Panel de Control", [chat_id]))
 
     def send_resend_item_menu(self, chat_id: str, items: list) -> None:
         self.resend_item_menus.append((chat_id, items))
@@ -266,3 +271,64 @@ def test_admin_resend_callback_in_group(monkeypatch) -> None:
     )
     assert resp2.status_code == 200
     assert ("cb-unauth", "No autorizado", True) in _FakeTelegramClient.latest.callbacks
+
+
+def test_admin_menu_command_and_callbacks_in_group(monkeypatch) -> None:
+    monkeypatch.setattr("emby_telegram_bot.webhook.EmbyClient", _FakeEmbyClient)
+    monkeypatch.setattr("emby_telegram_bot.webhook.TelegramClient", _FakeTelegramClient)
+    app = create_app(_settings())
+    client = app.test_client()
+
+    # Admin sends /menu in group -> shows admin menu
+    resp = client.post(
+        "/telegramhook",
+        json={"message": {"chat": {"id": -10099, "type": "supergroup"}, "from": {"id": 42}, "text": "/menu"}},
+    )
+    assert resp.status_code == 200
+    assert _FakeTelegramClient.latest.admin_menus == ["-10099"]
+
+    # Admin clicks admin:menu:resend_recent in group
+    resp2 = client.post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "cb-menu-recent",
+                "from": {"id": 42},
+                "data": "admin:menu:resend_recent",
+                "message": {"chat": {"id": -10099, "type": "supergroup"}},
+            }
+        },
+    )
+    assert resp2.status_code == 200
+    assert len(_FakeTelegramClient.latest.resend_item_menus) == 1
+
+    # Admin clicks admin:menu:moria_status in group
+    resp3 = client.post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "cb-menu-status",
+                "from": {"id": 42},
+                "data": "admin:menu:moria_status",
+                "message": {"chat": {"id": -10099, "type": "supergroup"}},
+            }
+        },
+    )
+    assert resp3.status_code == 200
+    assert "buffer Moria" in _FakeTelegramClient.latest.sent_texts[-1][0]
+
+    # Non-admin clicks admin:menu in group -> rejected
+    resp4 = client.post(
+        "/telegramhook",
+        json={
+            "callback_query": {
+                "id": "cb-menu-unauth",
+                "from": {"id": 9999},
+                "data": "admin:menu:resend_recent",
+                "message": {"chat": {"id": -10099, "type": "supergroup"}},
+            }
+        },
+    )
+    assert resp4.status_code == 200
+    assert ("cb-menu-unauth", "No autorizado", True) in _FakeTelegramClient.latest.callbacks
+

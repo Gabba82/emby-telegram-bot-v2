@@ -148,6 +148,25 @@ class TelegramClient:
         )
         self.send_text("Que quieres hacer?", chat_ids=[chat_id], reply_markup=keyboard)
 
+    def send_admin_menu(self, chat_id: str) -> None:
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("📦 Reenviar reciente", callback_data="admin:menu:resend_recent"),
+                    InlineKeyboardButton("⚡ Reenviar último", callback_data="admin:menu:resend_latest"),
+                ],
+                [
+                    InlineKeyboardButton("📊 Buffer Moria", callback_data="admin:menu:moria_status"),
+                    InlineKeyboardButton("🚀 Forzar Moria", callback_data="admin:menu:moria_flush"),
+                ],
+                [
+                    InlineKeyboardButton("🩺 Diagnóstico", callback_data="admin:menu:diagnostics"),
+                    InlineKeyboardButton("🔎 Buscar en Emby", callback_data="admin:menu:search"),
+                ],
+            ]
+        )
+        self.send_text("⚙️ Panel de Control de Administrador:\nElige una opción:", chat_ids=[chat_id], reply_markup=keyboard)
+
     def send_search_filter_menu(self, chat_id: str) -> None:
         keyboard = InlineKeyboardMarkup(
             [

@@ -658,8 +658,14 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                 _send_diagnostics(chat_id, is_private_chat, user_id=private_chat_id)
                 return
         if command in {"/start", "/menu"}:
-            if is_private_chat:
+            if command == "/start" and is_private_chat:
                 telegram.send_private_menu_help(chat_id, is_admin=is_admin)
+                return
+            if is_admin:
+                telegram.send_admin_menu(chat_id)
+                return
+            if is_private_chat:
+                telegram.send_private_menu_help(chat_id, is_admin=False)
                 return
             telegram.send_search_menu(chat_id)
             return
@@ -778,7 +784,8 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             callback_data.startswith("search:mode:") or callback_data == "search:again"
         )
         is_resend_selection = callback_data.startswith("resend:")
-        is_private_selection = is_search_selection or is_search_flow or is_resend_selection
+        is_admin_menu_selection = callback_data.startswith("admin:menu:")
+        is_private_selection = is_search_selection or is_search_flow or is_resend_selection or is_admin_menu_selection
         if not chat_id or (not _is_authorized_chat(chat_id) and not is_private_selection):
             if callback_id:
                 telegram.answer_callback_query(callback_id)
@@ -786,11 +793,54 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             return
 
         is_admin_callback_actor = _is_admin_actor(chat_id, is_private_chat, user_id=private_chat_id)
-        if is_resend_selection and not is_admin_callback_actor:
+        if (is_resend_selection or is_admin_menu_selection) and not is_admin_callback_actor:
             if callback_id:
                 telegram.answer_callback_query(callback_id, "No autorizado", show_alert=True)
-            logging.warning("Resend callback rejected for non-admin chat_id=%s user_id=%s", chat_id, private_chat_id)
+            logging.warning("Admin callback rejected for non-admin chat_id=%s user_id=%s", chat_id, private_chat_id)
             return
+
+        if is_admin_menu_selection:
+            if callback_id:
+                telegram.answer_callback_query(callback_id)
+            action = callback_data.removeprefix("admin:menu:")
+            if action == "resend_recent":
+                _open_resend_item_menu(chat_id)
+                return
+            if action == "resend_latest":
+                _send_latest_added(chat_id)
+                return
+            if action == "moria_status":
+                movies_count, episodes_count = moria_aggregator.pending_count()
+                total = movies_count + episodes_count
+                status_desc = f"esperando publicacion ({settings.moria_buffer_seconds}s de ventana)" if total > 0 else "vacio (sin novedades pendientes)"
+                lines = [
+                    "📦 Estado del buffer Moria (PalaEmby):",
+                    f"- Peliculas pendientes: {movies_count}",
+                    f"- Episodios pendientes: {episodes_count}",
+                    f"- Total en cola: {total}",
+                    f"- Estado: {status_desc}",
+                ]
+                if total > 0:
+                    lines.append("\nPuedes forzar el envio inmediato con /moria_flush")
+                telegram.send_text("\n".join(lines), chat_ids=[chat_id])
+                return
+            if action == "moria_flush":
+                movies_count, episodes_count = moria_aggregator.pending_count()
+                if movies_count == 0 and episodes_count == 0:
+                    telegram.send_text("El buffer de Moria esta vacio. No hay novedades pendientes para enviar.", chat_ids=[chat_id])
+                    return
+                telegram.send_text(
+                    f"⚡ Forzando envio de Moria: {movies_count} pelicula(s) y {episodes_count} episodio(s) en curso...",
+                    chat_ids=[chat_id],
+                )
+                moria_aggregator.flush_now()
+                return
+            if action == "diagnostics":
+                _send_diagnostics(chat_id, is_private_chat, user_id=private_chat_id)
+                return
+            if action == "search":
+                telegram.send_search_filter_menu(chat_id)
+                return
 
         if callback_data.startswith("search:item:"):
             item_id = callback_data.removeprefix("search:item:")

@@ -162,6 +162,12 @@ class _FakeTelegramClient:
     def send_private_menu_help(self, chat_id: str, is_admin: bool = False) -> None:
         self.private_menu_helps.append((chat_id, is_admin))
 
+    def send_admin_menu(self, chat_id: str) -> None:
+        if not hasattr(self, "admin_menus"):
+            self.admin_menus = []
+        self.admin_menus.append(chat_id)
+        self.sent_texts.append(("Panel de Control", [chat_id]))
+
     def request_search_query(self, chat_id: str, mode: str = "all") -> None:
         self.search_requests.append((chat_id, mode))
 
