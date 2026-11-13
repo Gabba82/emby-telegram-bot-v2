@@ -311,6 +311,15 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
     def _is_authorized_chat(chat_id: str) -> bool:
         return chat_id in allowed_telegram_chats
 
+    def _is_admin_actor(chat_id: str, is_private_chat: bool, user_id: str = "") -> bool:
+        if is_private_chat and chat_id in set(admin_targets):
+            return True
+        if user_id and user_id in set(admin_targets):
+            return True
+        if chat_id in set(admin_targets):
+            return True
+        return False
+
     def _is_admin_private_chat(chat_id: str, is_private_chat: bool) -> bool:
         return is_private_chat and chat_id in set(admin_targets)
 
@@ -439,7 +448,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             return
         _open_resend_target_menu(chat_id, clean_item_id)
 
-    def _send_diagnostics(chat_id: str, is_private_chat: bool) -> None:
+    def _send_diagnostics(chat_id: str, is_private_chat: bool, user_id: str = "") -> None:
         checks = [
             *build_config_checks(settings, library_targets, playback_targets, admin_targets),
             *build_runtime_checks(emby, telegram),
@@ -450,18 +459,19 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             "",
             f"Chat actual: {chat_id}",
             f"Chat privado admin: {'si' if _is_admin_private_chat(chat_id, is_private_chat) else 'no'}",
+            f"Admin activo: {'si' if _is_admin_actor(chat_id, is_private_chat, user_id=user_id) else 'no'}",
             f"Notificaciones biblioteca: {'activas' if settings.enable_library_notifications else 'desactivadas'}",
             f"Notificaciones playback: {'activas' if settings.enable_playback_notifications else 'desactivadas'}",
         ]
         telegram.send_text("\n".join(lines), chat_ids=[chat_id])
 
-    def _send_help(chat_id: str, is_private_chat: bool) -> None:
+    def _send_help(chat_id: str, is_private_chat: bool, user_id: str = "") -> None:
         lines = [
             "Ayuda del bot:",
             "- /buscar titulo: busca una pelicula o serie.",
             "- /menu: muestra como abrir el menu de comandos.",
         ]
-        if _is_admin_private_chat(chat_id, is_private_chat):
+        if _is_admin_actor(chat_id, is_private_chat, user_id=user_id):
             lines.extend(
                 [
                     "",
@@ -469,6 +479,8 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                     "- /reenviar: elegir entre contenido reciente y reenviarlo.",
                     "- /reenviaultimo: reenviar el ultimo contenido anadido.",
                     "- /reenvia ID_DE_EMBY: reenviar una ficha concreta.",
+                    "- /moria_status: ver novedades acumuladas de Moria en espera.",
+                    "- /moria_flush: forzar envio inmediato de novedades de Moria.",
                     "- /historial [pagina] [estado]: consultar entregas.",
                     "- /historial item ID: estado por destino, incluido desconocido.",
                     "- /reintentar NUMERO: solo la entrega pendiente o fallida.",
@@ -525,7 +537,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             return
         telegram.send_text(build_search_results_message(clean_query, items), chat_ids=[chat_id])
 
-    def _send_search_item(chat_id: str, item: dict[str, Any], fetch_details: bool = True) -> None:
+    def _send_search_item(chat_id: str, item: dict[str, Any], fetch_details: bool = True, user_id: str = "") -> None:
         item_id = item.get("Id")
         if item_id and fetch_details:
             try:
@@ -542,7 +554,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                 logging.warning("Cannot fetch series availability id=%s error=%s", item.get("Id"), exc)
         image = emby.get_item_image(item)
         telegram.send(build_search_item_caption(item, series_seasons=series_seasons), image, chat_ids=[chat_id])
-        if item.get("Id") and _is_admin_private_chat(chat_id, True):
+        if item.get("Id") and (_is_admin_private_chat(chat_id, True) or _is_admin_actor(chat_id, False, user_id=user_id)):
             telegram.send_search_admin_actions(chat_id, str(item["Id"]))
         telegram.send_search_again_action(chat_id)
 
@@ -552,6 +564,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         user = message.get("from") if isinstance(message.get("from"), dict) else {}
         private_chat_id = str(user.get("id") or "")
         is_private_chat = chat.get("type") == "private"
+        is_admin = _is_admin_actor(chat_id, is_private_chat, user_id=private_chat_id)
         reply_to_message = message.get("reply_to_message") if isinstance(message.get("reply_to_message"), dict) else {}
         reply_text = str(reply_to_message.get("text") or "")
         is_search_reply = is_private_chat and reply_text.startswith("Escribe el titulo de")
@@ -589,6 +602,28 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         is_private_search_command = is_private_chat and command == "/buscar"
         is_private_search_button = is_private_chat and text == PRIVATE_SEARCH_BUTTON_TEXT
         is_private_admin_button = is_private_chat and text in ADMIN_PRIVATE_BUTTON_TEXTS
+        is_admin_group_command = (
+            not is_private_chat
+            and is_admin
+            and command
+            in {
+                "/reenviar",
+                "/reenvia_menu",
+                "/reenviaultimo",
+                "/lastadded",
+                "/reenvia",
+                "/moria_status",
+                "/moriastatus",
+                "/moria_flush",
+                "/moriaflush",
+                "/diagnostico",
+                "/diagnostico_playback",
+                "/estado",
+                "/help",
+                "/version",
+                "/reload_menu",
+            }
+        )
 
         if not chat_id or (
             not _is_authorized_chat(chat_id)
@@ -597,6 +632,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             and not is_private_search_command
             and not is_private_search_button
             and not is_private_admin_button
+            and not is_admin_group_command
         ):
             logging.warning("Telegram update ignored from unauthorized chat_id=%s", chat_id or "unknown")
             return
@@ -619,30 +655,64 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                 telegram.send_text("Envia /reenvia ID_DE_EMBY para elegir destino.", chat_ids=[chat_id])
                 return
             if text == ADMIN_DIAGNOSTICS_BUTTON_TEXT:
-                _send_diagnostics(chat_id, is_private_chat)
+                _send_diagnostics(chat_id, is_private_chat, user_id=private_chat_id)
                 return
         if command in {"/start", "/menu"}:
             if is_private_chat:
-                telegram.send_private_menu_help(chat_id, is_admin=_is_admin_private_chat(chat_id, is_private_chat))
+                telegram.send_private_menu_help(chat_id, is_admin=is_admin)
                 return
             telegram.send_search_menu(chat_id)
             return
         if command == "/help":
-            _send_help(chat_id, is_private_chat)
+            _send_help(chat_id, is_private_chat, user_id=private_chat_id)
             return
         if command == "/version":
-            if not _is_admin_private_chat(chat_id, is_private_chat):
-                logging.warning("Version command rejected for non-admin/private chat_id=%s", chat_id)
-                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+            if not is_admin:
+                logging.warning("Version command rejected for non-admin chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
                 return
             _send_version(chat_id)
             return
         if command == "/reload_menu":
-            if not _is_admin_private_chat(chat_id, is_private_chat):
-                logging.warning("Reload menu command rejected for non-admin/private chat_id=%s", chat_id)
-                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+            if not is_admin:
+                logging.warning("Reload menu command rejected for non-admin chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
                 return
             _reload_bot_commands(chat_id)
+            return
+        if command in {"/moria_status", "/moriastatus"}:
+            if not is_admin:
+                logging.warning("Moria status rejected for non-admin chat_id=%s user_id=%s", chat_id, private_chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
+                return
+            movies_count, episodes_count = moria_aggregator.pending_count()
+            total = movies_count + episodes_count
+            status_desc = f"esperando publicacion ({settings.moria_buffer_seconds}s de ventana)" if total > 0 else "vacio (sin novedades pendientes)"
+            lines = [
+                "📦 Estado del buffer Moria (PalaEmby):",
+                f"- Peliculas pendientes: {movies_count}",
+                f"- Episodios pendientes: {episodes_count}",
+                f"- Total en cola: {total}",
+                f"- Estado: {status_desc}",
+            ]
+            if total > 0:
+                lines.append("\nPuedes forzar el envio inmediato con /moria_flush")
+            telegram.send_text("\n".join(lines), chat_ids=[chat_id])
+            return
+        if command in {"/moria_flush", "/moriaflush"}:
+            if not is_admin:
+                logging.warning("Moria flush rejected for non-admin chat_id=%s user_id=%s", chat_id, private_chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
+                return
+            movies_count, episodes_count = moria_aggregator.pending_count()
+            if movies_count == 0 and episodes_count == 0:
+                telegram.send_text("El buffer de Moria esta vacio. No hay novedades pendientes para enviar.", chat_ids=[chat_id])
+                return
+            telegram.send_text(
+                f"⚡ Forzando envio de Moria: {movies_count} pelicula(s) y {episodes_count} episodio(s) en curso...",
+                chat_ids=[chat_id],
+            )
+            moria_aggregator.flush_now()
             return
         if command == "/buscar":
             target_chat_id = chat_id if is_private_chat else private_chat_id
@@ -654,31 +724,31 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             _send_search_results(target_chat_id, arg, with_images=True)
             return
         if command in {"/reenviar", "/reenvia_menu"}:
-            if not _is_admin_private_chat(chat_id, is_private_chat):
-                logging.warning("Manual resend menu rejected for non-admin/private chat_id=%s", chat_id)
-                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+            if not is_admin:
+                logging.warning("Manual resend menu rejected for non-admin chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
                 return
             _open_resend_item_menu(chat_id)
             return
         if command in {"/reenviaultimo", "/lastadded"}:
-            if not _is_admin_private_chat(chat_id, is_private_chat):
-                logging.warning("Manual latest resend rejected for non-admin/private chat_id=%s", chat_id)
-                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+            if not is_admin:
+                logging.warning("Manual latest resend rejected for non-admin chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
                 return
             _send_latest_added(chat_id)
             return
         if command == "/reenvia":
-            if not _is_admin_private_chat(chat_id, is_private_chat):
-                logging.warning("Manual item resend rejected for non-admin/private chat_id=%s", chat_id)
-                telegram.send_text("Este comando solo esta disponible en privado para administradores.", chat_ids=[chat_id])
+            if not is_admin:
+                logging.warning("Manual item resend rejected for non-admin chat_id=%s", chat_id)
+                telegram.send_text("Este comando solo esta disponible para administradores.", chat_ids=[chat_id])
                 return
             _send_item_by_id(chat_id, arg)
             return
         if command in {"/diagnostico", "/diagnostico_playback", "/estado"}:
-            if not _is_authorized_chat(chat_id):
+            if not _is_authorized_chat(chat_id) and not is_admin:
                 logging.warning("Diagnostics rejected for unauthorized chat_id=%s", chat_id)
                 return
-            _send_diagnostics(chat_id, is_private_chat)
+            _send_diagnostics(chat_id, is_private_chat, user_id=private_chat_id)
             return
 
         if is_search_reply:
@@ -701,12 +771,13 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         user = callback_query.get("from") if isinstance(callback_query.get("from"), dict) else {}
         private_chat_id = str(user.get("id") or "")
         callback_data = str(callback_query.get("data") or "")
+        is_private_chat = chat.get("type") == "private"
 
-        is_search_selection = chat.get("type") == "private" and callback_data.startswith("search:item:")
-        is_search_flow = chat.get("type") == "private" and (
+        is_search_selection = is_private_chat and callback_data.startswith("search:item:")
+        is_search_flow = is_private_chat and (
             callback_data.startswith("search:mode:") or callback_data == "search:again"
         )
-        is_resend_selection = chat.get("type") == "private" and callback_data.startswith("resend:")
+        is_resend_selection = callback_data.startswith("resend:")
         is_private_selection = is_search_selection or is_search_flow or is_resend_selection
         if not chat_id or (not _is_authorized_chat(chat_id) and not is_private_selection):
             if callback_id:
@@ -714,10 +785,11 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
             logging.warning("Telegram callback ignored from unauthorized chat_id=%s", chat_id or "unknown")
             return
 
-        if is_resend_selection and not _is_admin_private_chat(chat_id, chat.get("type") == "private"):
+        is_admin_callback_actor = _is_admin_actor(chat_id, is_private_chat, user_id=private_chat_id)
+        if is_resend_selection and not is_admin_callback_actor:
             if callback_id:
                 telegram.answer_callback_query(callback_id, "No autorizado", show_alert=True)
-            logging.warning("Resend callback rejected for non-admin/private chat_id=%s", chat_id)
+            logging.warning("Resend callback rejected for non-admin chat_id=%s user_id=%s", chat_id, private_chat_id)
             return
 
         if callback_data.startswith("search:item:"):
@@ -734,7 +806,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
                 logging.error("Selected search item id=%s returned no details", item_id)
                 telegram.send_text("No he podido cargar ese resultado ahora mismo.", chat_ids=[chat_id])
                 return
-            _send_search_item(chat_id, item, fetch_details=False)
+            _send_search_item(chat_id, item, fetch_details=False, user_id=private_chat_id)
             return
 
         if callback_data.startswith("search:mode:"):

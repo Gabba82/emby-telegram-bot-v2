@@ -417,6 +417,8 @@ class TelegramClient:
             BotCommand("reenviar", "Reenviar contenido reciente"),
             BotCommand("reenviaultimo", "Reenviar ultimo contenido"),
             BotCommand("reenvia", "Reenviar por ID de Emby"),
+            BotCommand("moria_status", "Ver buffer de Moria"),
+            BotCommand("moria_flush", "Forzar envio de Moria"),
             BotCommand("historial", "Historial persistente de entregas"),
             BotCommand("reintentar", "Reintentar una entrega por su numero"),
             BotCommand("diagnostico", "Validar configuracion"),
@@ -427,7 +429,10 @@ class TelegramClient:
             await bot.set_my_commands(user_commands)
             for chat_id in admin_chat_ids:
                 if chat_id:
-                    await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=chat_id))
+                    try:
+                        await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=chat_id))
+                    except Exception as exc:
+                        logging.warning("Failed setting admin commands for chat_id=%s: %s", chat_id, exc)
 
     async def _answer_callback_query(self, callback_query_id: str, text: str, show_alert: bool = False) -> None:
         async with Bot(token=self._token) as bot:

@@ -2,6 +2,15 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.6.1] — Control de administración en grupos y gestión del buffer de Moria
+
+### Añadido
+- **Operación administrativa en grupos:** Los administradores ahora pueden ejecutar comandos (`/reenviar`, `/reenviaultimo`, `/reenvia`, `/diagnostico`, `/version`, `/help`, etc.) e interactuar con menús de reenvío directamente desde sus grupos privados o autorizados, reconociendo el ID del usuario emisor (`ADMIN_CHAT_IDS`).
+- **Nuevos comandos de Moria:**
+  - `/moria_status`: Informa en tiempo real del número de películas y episodios acumulados en cola esperando en el buffer de Moria y el estado de la ventana de tiempo.
+  - `/moria_flush`: Permite forzar el envío inmediato de todo el contenido acumulado en el buffer de Moria sin esperar a que concluyan los 120 segundos.
+- Menú de comandos actualizado en Telegram para administradores con `/moria_status` y `/moria_flush`.
+
 ## [0.6.0] — Agrupación consolidada de novedades de Moria (PalaEmby)
 
 ### Añadido
