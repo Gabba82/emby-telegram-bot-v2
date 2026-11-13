@@ -111,6 +111,13 @@ def _display_resolution(resolution: str) -> str:
     return "4K" if resolution == "2160p" else resolution
 
 
+def _item_resolution(item: dict[str, Any], media_source: dict[str, Any] | None) -> str:
+    res = _resolution_from_media_streams(item, media_source or {})
+    if not _is_known(res):
+        res = resolution_from_filename(item.get("Path"))
+    return res if _is_known(res) else ""
+
+
 def _join_known(parts: list[str]) -> str:
     return " · ".join([part for part in parts if _is_known(part)])
 
@@ -307,9 +314,45 @@ def _imdb_url(item: dict[str, Any]) -> str:
     return f"https://www.imdb.com/title/{imdb_id}/"
 
 
+def _tmdb_url(item: dict[str, Any]) -> str:
+    provider_ids = item.get("ProviderIds") or {}
+    tmdb_id = _first_str(
+        provider_ids.get("Tmdb"),
+        provider_ids.get("TMDb"),
+        provider_ids.get("TMDB"),
+        provider_ids.get("tmdb"),
+    )
+    if not tmdb_id:
+        return ""
+    media_type = item.get("Type")
+    path_type = "tv" if media_type in {"Series", "Episode", "Season"} else "movie"
+    return f"https://www.themoviedb.org/{path_type}/{tmdb_id}"
+
+
+def _trailer_url(item: dict[str, Any]) -> str:
+    remote_trailers = item.get("RemoteTrailers")
+    if isinstance(remote_trailers, list) and remote_trailers:
+        url = remote_trailers[0].get("Url")
+        if url:
+            return str(url)
+    trailer_url = item.get("TrailerUrl")
+    if trailer_url:
+        return str(trailer_url)
+    return ""
+
+
 def _format_external_links(item: dict[str, Any]) -> list[str]:
+    links = []
     imdb = _imdb_url(item)
-    return [f"IMDb: {imdb}"] if imdb else []
+    if imdb:
+        links.append(f"IMDb: {imdb}")
+    tmdb = _tmdb_url(item)
+    if tmdb:
+        links.append(f"TMDb: {tmdb}")
+    trailer = _trailer_url(item)
+    if trailer:
+        links.append(f"🎬 Tráiler: {trailer}")
+    return links
 
 
 def _format_rating(value: Any) -> str:
@@ -745,6 +788,19 @@ def _format_moria_movie_entry(item: dict[str, Any]) -> str:
     title_line = f"🍿 {name} ({year})" if year else f"🍿 {name}"
 
     details = []
+    media_source = _extract_primary_media_source(item)
+    resolution = _item_resolution(item, media_source)
+    if resolution and _is_known(resolution):
+        details.append(f"🖥️ {_display_resolution(resolution)}")
+
+    streams = _streams_by_type(item, media_source, "audio")
+    audio_labels = [_audio_label(s) for s in streams if _audio_label(s)]
+    clean_audio = [a for a in audio_labels if _is_known(a)]
+    if clean_audio:
+        audio_str = _format_stream_labels(clean_audio, max_items=2)
+        if audio_str:
+            details.append(f"🔊 {audio_str}")
+
     rating = _format_rating(item.get("CommunityRating"))
     if rating:
         details.append(f"⭐ {rating}/10")
@@ -760,11 +816,23 @@ def _format_moria_movie_entry(item: dict[str, Any]) -> str:
     if details:
         title_line += " · " + " · ".join(details)
 
+    links = []
+    trailer = _trailer_url(item)
+    if trailer:
+        links.append(f"🎬 Tráiler: {trailer}")
+    tmdb = _tmdb_url(item)
+    if tmdb:
+        links.append(f"TMDb: {tmdb}")
+
+    lines = [title_line]
+    if links:
+        lines.append("   " + " · ".join(links))
+
     overview = _first_str(item.get("Overview"))
     if overview:
         short = _short_overview(overview, max_length=250)
-        return f"{title_line}\nSinopsis:\n{_expandable_section(short)}"
-    return title_line
+        lines.append(f"Sinopsis:\n{_expandable_section(short)}")
+    return "\n".join(lines)
 
 
 def build_moria_movies_reports(
@@ -824,14 +892,41 @@ def _format_moria_series_entry(
     sample: dict[str, Any],
 ) -> str:
     title_line = f"🔹 {series_name} · Temporada {season_number}"
+    details = []
+    media_source = _extract_primary_media_source(sample)
+    resolution = _item_resolution(sample, media_source)
+    if resolution and _is_known(resolution):
+        details.append(f"🖥️ {_display_resolution(resolution)}")
+    streams = _streams_by_type(sample, media_source, "audio")
+    audio_labels = [_audio_label(s) for s in streams if _audio_label(s)]
+    clean_audio = [a for a in audio_labels if _is_known(a)]
+    if clean_audio:
+        audio_str = _format_stream_labels(clean_audio, max_items=2)
+        if audio_str:
+            details.append(f"🔊 {audio_str}")
+    if details:
+        title_line += " (" + " · ".join(details) + ")"
+
     formatted_episodes = _format_episode_tags([f"S{season_number:02}E{ep:02}" for ep in sorted(set(episodes))])
     ep_line = f"   🧩 Episodios añadidos: {formatted_episodes}"
+
+    links = []
+    trailer = _trailer_url(sample)
+    if trailer:
+        links.append(f"🎬 Tráiler: {trailer}")
+    tmdb = _tmdb_url(sample)
+    if tmdb:
+        links.append(f"TMDb: {tmdb}")
+
+    lines = [title_line, ep_line]
+    if links:
+        lines.append("   " + " · ".join(links))
 
     overview = _first_str(sample.get("Overview"), sample.get("SeriesOverview"))
     if overview and sample.get("Type") == "Series":
         short = _short_overview(overview, max_length=250)
-        return f"{title_line}\n{ep_line}\n   Sinopsis:\n{_expandable_section(short)}"
-    return f"{title_line}\n{ep_line}"
+        lines.append(f"   Sinopsis:\n{_expandable_section(short)}")
+    return "\n".join(lines)
 
 
 def build_moria_series_reports(

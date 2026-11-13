@@ -77,7 +77,13 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
         api_key=settings.emby_api_key,
         timeout_seconds=settings.request_timeout_seconds,
     )
-    telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
+    effective_public_url = settings.emby_public_url or settings.emby_api_url.rstrip("/emby")
+    try:
+        telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids, emby_public_url=effective_public_url)
+    except TypeError:
+        telegram = TelegramClient(token=settings.telegram_token, chat_ids=settings.chat_ids)
+    if hasattr(telegram, "_emby_public_url"):
+        telegram._emby_public_url = effective_public_url
     publications = PublicationService(store, telegram, emby.get_item_image)
     app.extensions["publications"] = publications
     telegram.configure_bot_commands(settings.admin_chat_ids)
@@ -395,7 +401,7 @@ def create_app(settings: Settings, store: DeliveryStore | None = None, *, panel:
 
     def _open_resend_item_menu(chat_id: str) -> None:
         try:
-            items = emby.get_recently_added_items(limit=10)
+            items = emby.get_recently_added_items(limit=15)
         except Exception as exc:
             logging.error("Recent items lookup failed error_type=%s error=%s", type(exc).__name__, exc)
             telegram.send_text("No he podido consultar contenido reciente en Emby.", chat_ids=[chat_id])

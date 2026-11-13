@@ -38,8 +38,14 @@ class PublicationService:
                 image = self.image_loader(item)
             except Exception:
                 image = None  # Optional artwork must not prevent a text delivery.
+            reply_markup = None
+            if hasattr(self.telegram, "build_item_reply_markup"):
+                reply_markup = self.telegram.build_item_reply_markup(item)
             try:
-                results = self.telegram.send(caption, image, chat_ids=[chat_id])
+                try:
+                    results = self.telegram.send(caption, image, chat_ids=[chat_id], reply_markup=reply_markup)
+                except TypeError:
+                    results = self.telegram.send(caption, image, chat_ids=[chat_id])
                 result = next((r for r in (results or []) if r.chat_id == chat_id),
                               SendResult(chat_id, "uncertain", error_type="MissingSendResult"))
             except Exception as exc:

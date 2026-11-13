@@ -70,19 +70,35 @@ def error_result(chat_id: str, exc: Exception) -> SendResult:
 
 
 class TelegramClient:
-    def __init__(self, token: str, chat_ids: list[str]) -> None:
+    def __init__(self, token: str, chat_ids: list[str], emby_public_url: str = "") -> None:
         self._token = token
         self._chat_ids = chat_ids
+        self._emby_public_url = emby_public_url
         self._chat_labels: dict[str, str] = {}
         self._chat_label_failures: dict[str, tuple[float, Exception]] = {}
 
-    def send(self, caption: str, image_bytes: bytes | None, chat_ids: list[str] | None = None) -> list[SendResult]:
+    def build_item_reply_markup(self, item: dict[str, Any]) -> InlineKeyboardMarkup | None:
+        if not self._emby_public_url:
+            return None
+        item_id = item.get("Id") or item.get("SeriesId")
+        if not item_id:
+            return None
+        url = f"{self._emby_public_url.rstrip('/')}/web/index.html#!/item?id={item_id}"
+        return InlineKeyboardMarkup([[InlineKeyboardButton("▶️ Ver en Emby", url=url)]])
+
+    def send(
+        self,
+        caption: str,
+        image_bytes: bytes | None,
+        chat_ids: list[str] | None = None,
+        reply_markup: Any | None = None,
+    ) -> list[SendResult]:
         targets = list(dict.fromkeys(chat_ids if chat_ids is not None else self._chat_ids))
         if not targets:
             return []
         try:
             formatted_caption, parse_mode = format_caption_for_telegram(caption)
-            return asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets))
+            return asyncio.run(self._send_all(formatted_caption, parse_mode, image_bytes, targets, reply_markup=reply_markup))
         except Exception as exc:
             logging.error("Telegram batch send failed error_type=%s", type(exc).__name__)
             return [error_result(chat_id, exc) for chat_id in targets]
@@ -152,16 +168,16 @@ class TelegramClient:
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("📦 Reenviar reciente", callback_data="admin:menu:resend_recent"),
+                    InlineKeyboardButton("📦 Elegir de recientes", callback_data="admin:menu:resend_recent"),
                     InlineKeyboardButton("⚡ Reenviar último", callback_data="admin:menu:resend_latest"),
                 ],
                 [
+                    InlineKeyboardButton("🔎 Buscar y reenviar", callback_data="admin:menu:search"),
                     InlineKeyboardButton("📊 Buffer Moria", callback_data="admin:menu:moria_status"),
-                    InlineKeyboardButton("🚀 Forzar Moria", callback_data="admin:menu:moria_flush"),
                 ],
                 [
+                    InlineKeyboardButton("🚀 Forzar Moria", callback_data="admin:menu:moria_flush"),
                     InlineKeyboardButton("🩺 Diagnóstico", callback_data="admin:menu:diagnostics"),
-                    InlineKeyboardButton("🔎 Buscar en Emby", callback_data="admin:menu:search"),
                 ],
             ]
         )
@@ -206,7 +222,7 @@ class TelegramClient:
 
     def send_resend_item_menu(self, chat_id: str, items: list[dict[str, Any]]) -> None:
         buttons = []
-        for index, item in enumerate(items[:10], start=1):
+        for index, item in enumerate(items[:15], start=1):
             item_id = str(item.get("Id") or "")
             if not item_id:
                 continue
@@ -218,12 +234,14 @@ class TelegramClient:
             label = f"{index}. {label_type}: {name}{suffix}"
             buttons.append([InlineKeyboardButton(label[:64], callback_data=f"resend:item:{item_id}")])
 
+        buttons.append([InlineKeyboardButton("🔎 Buscar otro para reenviar", callback_data="search:start")])
+
         if not buttons:
             self.send_text("No he encontrado contenido reciente para reenviar.", chat_ids=[chat_id])
             return
 
         keyboard = InlineKeyboardMarkup(buttons)
-        self.send_text("Elige que contenido quieres reenviar:", chat_ids=[chat_id], reply_markup=keyboard)
+        self.send_text("Elige qué contenido quieres reenviar:", chat_ids=[chat_id], reply_markup=keyboard)
 
     def send_resend_target_menu(
         self,
@@ -291,19 +309,34 @@ class TelegramClient:
         except Exception as exc:
             logging.error("Telegram callback answer failed error=%s", exc)
 
-    async def _send_all(self, formatted_caption: str, parse_mode: str,
-                        image_bytes: bytes | None, targets: list[str]) -> list[SendResult]:
+    async def _send_all(
+        self,
+        formatted_caption: str,
+        parse_mode: str,
+        image_bytes: bytes | None,
+        targets: list[str],
+        reply_markup: Any | None = None,
+    ) -> list[SendResult]:
         results = []
         try:
             async with Bot(token=self._token) as bot:
                 for chat_id in targets:
                     try:
                         if image_bytes:
-                            message = await bot.send_photo(chat_id=chat_id, photo=io.BytesIO(image_bytes),
-                                                           caption=formatted_caption, parse_mode=parse_mode)
+                            message = await bot.send_photo(
+                                chat_id=chat_id,
+                                photo=io.BytesIO(image_bytes),
+                                caption=formatted_caption,
+                                parse_mode=parse_mode,
+                                reply_markup=reply_markup,
+                            )
                         else:
-                            message = await bot.send_message(chat_id=chat_id, text=formatted_caption,
-                                                             parse_mode=parse_mode)
+                            message = await bot.send_message(
+                                chat_id=chat_id,
+                                text=formatted_caption,
+                                parse_mode=parse_mode,
+                                reply_markup=reply_markup,
+                            )
                         if getattr(message, "message_id", None) is None:
                             results.append(SendResult(chat_id, "uncertain", error_type="MissingMessageId"))
                         else:

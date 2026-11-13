@@ -50,6 +50,7 @@ class Settings:
     moria_buffer_seconds: int = 120
     moria_library_indicators: list[str] = field(default_factory=lambda: ["strm", "PalaEmby"])
     enable_moria_batch: bool = True
+    emby_public_url: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -78,6 +79,7 @@ class Settings:
         moria_indicators_raw = os.getenv("MORIA_LIBRARY_INDICATORS", "strm,PalaEmby").strip()
         enable_moria_batch = _parse_bool(os.getenv("ENABLE_MORIA_BATCH", ""), True)
         moria_library_indicators = [ind.strip() for ind in moria_indicators_raw.split(",") if ind.strip()]
+        emby_public_url = os.getenv("EMBY_PUBLIC_URL", "").strip()
         enable_library_notifications = _parse_bool(os.getenv("ENABLE_LIBRARY_NOTIFICATIONS", ""), True)
         enable_playback_notifications = _parse_bool(os.getenv("ENABLE_PLAYBACK_NOTIFICATIONS", ""), True)
         playback_notify_pause = _parse_bool(os.getenv("PLAYBACK_NOTIFY_PAUSE", ""), False)
@@ -144,4 +146,5 @@ class Settings:
             moria_buffer_seconds=moria_buffer_seconds,
             moria_library_indicators=moria_library_indicators,
             enable_moria_batch=enable_moria_batch,
+            emby_public_url=emby_public_url,
         )

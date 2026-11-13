@@ -2,6 +2,16 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). El estado de verificación de cada versión está en [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md).
 
+## [0.6.2] — Enriquecimiento visual, enlaces a Emby/TMDb/Trailer y selector ampliado de reenvío
+
+### Añadido
+- **Resolución y pistas de audio en Moria:** Los reportes de Moria ahora identifican y muestran la resolución de video (`🖥️ 4K`, `🖥️ 1080p`, `🖥️ 720p`, etc.) y los idiomas de audio (`🔊 Castellano`, `🔊 Inglés`, etc.) tanto a partir de los flujos de medios de Emby como de los nombres de archivo.
+- **Enlaces a Trailer y TMDb:** Integración de enlaces directos a tráilers oficiales de YouTube y fichas de TheMovieDb cuando Emby dispone de dichos identificadores en sus metadatos.
+- **Deep link interactivo a Emby ("▶️ Ver en Emby"):** Soporte para la variable de entorno `EMBY_PUBLIC_URL`. Cuando está configurada, las publicaciones en Telegram incluyen un botón inline para saltar directamente a la ficha del contenido en el cliente web de Emby.
+- **Selector de reenvío ampliado y clarificado:**
+  - `send_admin_menu` ahora diferencia claramente entre "📦 Elegir de recientes", "⚡ Reenviar último" y "🔎 Buscar y reenviar".
+  - El selector de recientes ahora muestra hasta 15 títulos recientes (antes limitado a 8) e incluye un botón directo al buscador si el contenido deseado no está en la lista.
+
 ## [0.6.1] — Control de administración en grupos y gestión del buffer de Moria
 
 ### Añadido
