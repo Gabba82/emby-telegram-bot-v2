@@ -40,6 +40,7 @@ services:
       PANEL_ENABLED: ${PANEL_ENABLED:-false}
       PANEL_ALLOW_SENDS: ${PANEL_ALLOW_SENDS:-false}
       HISTORY_DB_PATH: /data/history.sqlite3
+      EMBY_PUBLIC_URL: ${EMBY_PUBLIC_URL:-https://emby.gabba82.duckdns.org}
     volumes:
       - history-data:/data
     ports:
